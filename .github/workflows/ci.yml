@@ -1,4 +1,4 @@
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 name: Continuous Integration
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,4 +29,5 @@ jobs:
         with:
           name: spice2x-ci-${{ env.COMMIT_SHORT_SHA }}
           path: src/spice2x/bin
+
           if-no-files-found: error
