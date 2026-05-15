@@ -358,6 +358,7 @@ namespace avs {
             .property_node_get_desc             = "XC0bbe9700014a",
             .property_get_error                 = "XC0bbe9700012b",
             .property_node_clone                = "XC0bbe970000eb",
+            .property_query_size                = "XC0bbe97000152",
             .property_node_query_stat           = "XC0bbe97000157",
             .property_node_datasize             = "XC0bbe97000149",
             .property_mem_write                 = "XC0bbe97000136",
