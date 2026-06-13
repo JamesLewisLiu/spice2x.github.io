@@ -61,10 +61,10 @@ namespace overlay::windows {
     const float ROW_INDENT = overlay::apply_scaling(8);
     const auto PROJECT_URL = "https://spice2x.github.io";
 
-    constexpr ImVec4 TEXT_COLOR_GREEN(0.36f, 0.81f, 0.98f, 1.f);
+    constexpr ImVec4 TEXT_COLOR_GREEN(1.00f, 1.00f, 1.00f, 1.f);
     constexpr ImVec4 TEXT_COLOR_RED(0.96f, 0.66f, 0.72f, 1.f);
     constexpr ImVec4 TEXT_COLOR_PINK(0.96f, 0.66f, 0.72f, 1.f);
-    constexpr ImVec4 TEXT_COLOR_BLUE(0.36f, 0.81f, 0.98f, 1.f);
+    constexpr ImVec4 TEXT_COLOR_BLUE(1.00f, 1.00f, 1.00f, 1.f);
     constexpr uint32_t OPTION_INPUT_TEXT_WIDTH = 512;
 
     // subtab groups shown in the Options tab left navigation, in display order
@@ -5338,7 +5338,7 @@ namespace overlay::windows {
     void Config::build_menu(int *game_selected) {
         bool about_popup = false;
         bool reset_config_popup = false;
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.16f, 0.26f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.16f, 0.12f, 0.18f, 1.0f));
         if (ImGui::BeginMenuBar()) {
 
             // [spice2x]
@@ -5388,7 +5388,7 @@ namespace overlay::windows {
             // game selector
             ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.96f, 0.66f, 0.72f, 0.54f));
             ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.96f, 0.66f, 0.72f, 0.54f));
-            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.36f, 0.81f, 0.98f, 0.64f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1.00f, 1.00f, 1.00f, 0.30f));
             ImGui::PushItemWidth(
                 MIN(overlay::apply_scaling(700),
                     MAX(overlay::apply_scaling(100),

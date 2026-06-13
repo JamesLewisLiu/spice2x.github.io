@@ -97,7 +97,7 @@ namespace overlay::windows {
 
         int pushed = 0;
         if (light && 0.5f < GameAPI::Lights::readLight(RI_MGR, *light)) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.36f, 0.81f, 0.98f, 0.9f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.96f, 0.66f, 0.72f, 0.9f));
             pushed += 1;
         }
 
