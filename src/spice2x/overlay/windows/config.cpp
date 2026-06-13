@@ -61,8 +61,10 @@ namespace overlay::windows {
     const float ROW_INDENT = overlay::apply_scaling(8);
     const auto PROJECT_URL = "https://spice2x.github.io";
 
-    constexpr ImVec4 TEXT_COLOR_GREEN(0.f, 1.f, 0.f, 1.f);
-    constexpr ImVec4 TEXT_COLOR_RED(1.f, 0.f, 0.f, 1.f);
+    constexpr ImVec4 TEXT_COLOR_GREEN(1.00f, 1.00f, 1.00f, 1.f);
+    constexpr ImVec4 TEXT_COLOR_RED(0.96f, 0.66f, 0.72f, 1.f);
+    constexpr ImVec4 TEXT_COLOR_PINK(0.96f, 0.66f, 0.72f, 1.f);
+    constexpr ImVec4 TEXT_COLOR_BLUE(1.00f, 1.00f, 1.00f, 1.f);
     constexpr uint32_t OPTION_INPUT_TEXT_WIDTH = 512;
 
     // subtab groups shown in the Options tab left navigation, in display order
@@ -590,7 +592,7 @@ namespace overlay::windows {
                     // help text for binding buttons, if the game has one
                     const auto help_text = games::get_buttons_help(this->games_selected_name);
                     if (!help_text.empty()) {
-                        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Button Bindings");
+                        ImGui::TextColored(TEXT_COLOR_PINK, "Button Bindings");
                         ImGui::Spacing();
                         ImGui::TextWrapped("%s", help_text.c_str());
                         ImGui::TextUnformatted("");
@@ -620,7 +622,7 @@ namespace overlay::windows {
                     // help text for binding analog, if the game has one
                     const auto help_text = games::get_analogs_help(this->games_selected_name);
                     if (!help_text.empty()) {
-                        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Analog Bindings");
+                        ImGui::TextColored(TEXT_COLOR_PINK, "Analog Bindings");
                         ImGui::Spacing();
                         ImGui::TextWrapped("%s", help_text.c_str());
                         ImGui::TextUnformatted("");
@@ -735,7 +737,7 @@ namespace overlay::windows {
                 ImGui::BeginChild("Patches", ImVec2(
                         0, ImGui::GetWindowContentRegionMax().y - page_offset2), false);
                 if (failure) {
-                    ImGui::TextColored(ImVec4(0.7f, 0.f, 0.f, 1.f),
+                    ImGui::TextColored(TEXT_COLOR_PINK,
                             "Unable to detect the game version.\n"
                             "Try to open Patch Manager using the game overlay.");
                 } else {
@@ -783,7 +785,7 @@ namespace overlay::windows {
         // disclaimer
         // note: distribution of modified version of this software without providing source is GPLv3 license violation.
         ImGui::TextColored(
-                ImVec4(1, 0.5f, 0.5f, 1.f),
+                TEXT_COLOR_PINK,
                 "spice2x is free & open source; if you paid money for it, you got scammed.");
         if (cfg::CONFIGURATOR_STANDALONE) {
             ImGui::SameLine();
@@ -806,11 +808,11 @@ namespace overlay::windows {
         ImGui::Indent(INDENT);
         if (is_tdj) {
             ImGui::TextColored(
-                ImVec4(1, 0.5f, 0.5f, 1.f),
+                TEXT_COLOR_PINK,
                 "WARNING: Lightning Model (TDJ) I/O will ignore keypad number input!");
         } else if (is_popn) {
             ImGui::TextColored(
-                ImVec4(1, 0.5f, 0.5f, 1.f),
+                TEXT_COLOR_PINK,
                 "WARNING: PikaPika Pop-Kun model will ignore keypad number input!");
         }
         ImGui::TextWrapped(
@@ -823,7 +825,7 @@ namespace overlay::windows {
 
     void Config::build_buttons(const std::string &name, std::vector<Button> *buttons, int min, int max) {
         ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "%s Buttons", name.c_str());
+        ImGui::TextColored(TEXT_COLOR_PINK, "%s Buttons", name.c_str());
 
         std::string reset_button_str = "Clear All";
         if (name == "Keypad") {
@@ -1318,7 +1320,7 @@ namespace overlay::windows {
             ImGui::TextUnformatted("Press any button for:");
             ImGui::Text("    %s", button->getName().c_str());
             ImGui::TextUnformatted("");
-            ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "Press ESC to cancel!");
+            ImGui::TextColored(TEXT_COLOR_PINK, "Press ESC to cancel!");
             ImGui::TextUnformatted("");
             ImGui::TextUnformatted(
                 "Hint: if your controller is refusing to be detected,\n"
@@ -1766,7 +1768,7 @@ namespace overlay::windows {
             ImGui::TextUnformatted("");
             const bool escape_cancels_bind = (this->controller_page_selected != ControllerPage::CONTROLLER_PAGE_OVERLAY);
             if (escape_cancels_bind) {
-                ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "Press ESC to cancel!");
+                ImGui::TextColored(TEXT_COLOR_PINK, "Press ESC to cancel!");
                 ImGui::TextUnformatted("");
             }
             ImGui::TextUnformatted(
@@ -2215,7 +2217,7 @@ namespace overlay::windows {
                 ImGui::TextUnformatted("\nPreview");
                 ImGui::Separator();
                 if (button_state == GameAPI::Buttons::State::BUTTON_PRESSED) {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.7f, 0.f, 1.f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_COLOR_PINK);
                 }
                 // this doesn't account for utf-8 but whatever
                 if (button_display.size() >= 40) {
@@ -2374,7 +2376,7 @@ namespace overlay::windows {
 
     void Config::build_analogs(const std::string &name, std::vector<Analog> *analogs) {
         ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Analogs");
+        ImGui::TextColored(TEXT_COLOR_PINK, "Analogs");
 
         const float clear_w = ImGui::CalcTextSize("Clear All").x
             + ImGui::GetStyle().FramePadding.x * 2;
@@ -2830,7 +2832,7 @@ namespace overlay::windows {
 
             // current state
             ImGui::Separator();
-            ImGui::TextColored(ImVec4(1.f, 0.7f, 0.f, 1.f), "Preview");
+            ImGui::TextColored(TEXT_COLOR_PINK, "Preview");
             float value = GameAPI::Analogs::getState(RI_MGR, analog);
             ImGui::ProgressBar(value);
 
@@ -2918,7 +2920,7 @@ namespace overlay::windows {
     void Config::build_lights(const std::string &name, std::vector<Light> *lights) {
         if (lights && !lights->empty()) {
             ImGui::AlignTextToFramePadding();
-            ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Lights");
+            ImGui::TextColored(TEXT_COLOR_PINK, "Lights");
 
             // auto match popup cleanup
             if (auto_match_testing && !ImGui::IsPopupOpen("Auto Match Lights")) {
@@ -3093,7 +3095,7 @@ namespace overlay::windows {
 
             auto_match_lights_popup(lights);
         } else {
-            ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Lights");
+            ImGui::TextColored(TEXT_COLOR_PINK, "Lights");
         }
         ImGui::Spacing();
 
@@ -3129,7 +3131,7 @@ namespace overlay::windows {
         auto render_section_header = [](const std::string &name) {
             const float pad = ImGui::GetTextLineHeight() * 0.5f;
             ImGui::Dummy(ImVec2(0, pad));
-            ImGui::TextColored(ImVec4(1.f, 0.7f, 0.f, 1.f), "%s", name.c_str());
+            ImGui::TextColored(TEXT_COLOR_PINK, "%s", name.c_str());
             ImGui::Separator();
         };
 
@@ -3637,7 +3639,7 @@ namespace overlay::windows {
         ImGui::Spacing();
 
         if (!detected_controller.empty()) {
-            ImGui::TextColored(ImVec4(1.f, 0.9f, 0.3f, 1.f),
+            ImGui::TextColored(TEXT_COLOR_BLUE,
                 "%s detected", detected_controller.c_str());
             if (has_soft) {
                 float help_w = ImGui::CalcTextSize("(?)").x;
@@ -3747,11 +3749,11 @@ namespace overlay::windows {
                 ImGui::TableNextRow();
 
                 if (is_active_test) {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.2f, 0.2f, 1.f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_COLOR_PINK);
                 } else if (soft_inactive) {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.f));
                 } else if (entry.soft) {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.9f, 0.3f, 1.f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_COLOR_BLUE);
                 } else {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.f, 0.5f, 1.f));
                 }
@@ -4186,7 +4188,7 @@ namespace overlay::windows {
     void Config::build_cards_virtual() {
         constexpr float TEXT_INPUT_WIDTH = 240.f;
 
-        ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "Card overrides");
+        ImGui::TextColored(TEXT_COLOR_PINK, "Card overrides");
         ImGui::Spacing();
         ImGui::TextUnformatted(
             "Specify hardcoded card numbers here. This will always take priority when Insert Card is pressed.");
@@ -4226,7 +4228,7 @@ namespace overlay::windows {
                 ImGui::PushStyleColor(
                     ImGuiCol_Text,
                     this->keypads_card_override_valid[player] ? ImVec4(1.f, 1.f, 1.f, 1.f) :
-                    ImVec4(1.f, 0.f, 0.f, 1.f));
+                    TEXT_COLOR_PINK);
                 ImGui::SetNextItemWidth(TEXT_INPUT_WIDTH);
                 ImGui::BeginDisabled(option.disabled);
                 ImGui::InputTextWithHint("##OverrideCard", "E0040100FFFFFFFF",
@@ -4286,7 +4288,7 @@ namespace overlay::windows {
                 // bad card number warning
                 if (!this->keypads_card_override_valid[player] && buffer_len > 0) {
                     ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), "Invalid card number");
+                    ImGui::TextColored(TEXT_COLOR_PINK, "Invalid card number");
                 }
 
                 if (ImGui::BeginPopupModal(
@@ -4364,7 +4366,7 @@ namespace overlay::windows {
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "Card from text files");
+        ImGui::TextColored(TEXT_COLOR_PINK, "Card from text files");
         ImGui::Spacing();
         ImGui::TextUnformatted(
             "Use text files on disk; its content will be read when Insert Card is pressed.");
@@ -4564,7 +4566,7 @@ namespace overlay::windows {
     }
 
     void Config::build_cards_reader() {
-        ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "NFC / API card reader status");
+        ImGui::TextColored(TEXT_COLOR_PINK, "NFC / API card reader status");
         ImGui::Spacing();
         if (cfg::CONFIGURATOR_STANDALONE) {
 
@@ -4965,7 +4967,7 @@ namespace overlay::windows {
         } else if (filter != nullptr) {
             cat = "Search results";
         }
-        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "%s", cat.c_str());
+        ImGui::TextColored(TEXT_COLOR_PINK, "%s", cat.c_str());
         ImGui::Separator();
 
         // render table
@@ -4994,7 +4996,7 @@ namespace overlay::windows {
                 if (option.is_active()) {
                     // active option
                     if (option.disabled || definition.disabled) {
-                        ImGui::TextColored(ImVec4(1.f, 0.4f, 0.f, 1.f), "%s", definition.title.c_str());
+                        ImGui::TextColored(TEXT_COLOR_PINK, "%s", definition.title.c_str());
                     } else {
                         ImGui::TextColored(TEXT_COLOR_GREEN, "%s", definition.title.c_str());
                     }
@@ -5241,7 +5243,7 @@ namespace overlay::windows {
                             nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
                         // for min width enforcement
                         ImGui::Dummy(ImVec2(320.f, 0.f));
-                        ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "%s", definition.title.c_str());
+                        ImGui::TextColored(TEXT_COLOR_PINK, "%s", definition.title.c_str());
 
                         ImGui::TextUnformatted("");
 
@@ -5336,11 +5338,11 @@ namespace overlay::windows {
     void Config::build_menu(int *game_selected) {
         bool about_popup = false;
         bool reset_config_popup = false;
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.14f, 0.14f, 0.14f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.16f, 0.12f, 0.18f, 1.0f));
         if (ImGui::BeginMenuBar()) {
 
             // [spice2x]
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.f, 0.f, 1.f));
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_COLOR_PINK);
             if (ImGui::BeginMenu("[spice2x]")) {
                 ImGui::PopStyleColor();
                 if (ImGui::MenuItem("spice2x.github.io")) {
@@ -5384,9 +5386,9 @@ namespace overlay::windows {
             }
 
             // game selector
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.34f, 0.14f, 0.14f, 0.54f));
-            ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.34f, 0.14f, 0.14f, 0.54f));
-            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.34f, 0.14f, 0.14f, 0.64f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.96f, 0.66f, 0.72f, 0.54f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.96f, 0.66f, 0.72f, 0.54f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1.00f, 1.00f, 1.00f, 0.30f));
             ImGui::PushItemWidth(
                 MIN(overlay::apply_scaling(700),
                     MAX(overlay::apply_scaling(100),
@@ -5417,7 +5419,7 @@ namespace overlay::windows {
 
         // reset configuration confirmation popup
         if (ImGui::BeginPopupModal("Reset Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1.f),
+            ImGui::TextColored(TEXT_COLOR_PINK,
                     "Do you really want to reset your configuration for all games?\n"
                     "Warning: This can't be reverted!");
             if (ImGui::Button("Yes")) {
@@ -5734,7 +5736,7 @@ namespace overlay::windows {
 
     void Config::build_presets() {
         ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Controller presets for: %s",
+        ImGui::TextColored(TEXT_COLOR_PINK, "Controller presets for: %s",
             this->games_selected_name.c_str());
         ImGui::Spacing();
 
@@ -5835,7 +5837,7 @@ namespace overlay::windows {
             if (templates_selected >= 0 && templates_selected < (int)templates_cache.size()) {
                 const auto &t = templates_cache[templates_selected];
                 ImGui::TextWrapped("Delete preset \"%s\"?", t.name.c_str());
-                ImGui::TextColored(ImVec4(1.f, 0.5f, 0.5f, 1.f), "This cannot be undone.");
+                ImGui::TextColored(TEXT_COLOR_PINK, "This cannot be undone.");
 
                 // buttons at the bottom
                 ImGui::SetCursorPosY(ImGui::GetWindowHeight()
@@ -5867,7 +5869,7 @@ namespace overlay::windows {
                 // clear all button
                 ImGui::Separator();
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextColored(ImVec4(1.f, 0.5f, 0.5f, 1.f),
+                ImGui::TextColored(TEXT_COLOR_PINK,
                     "Step 1: Reset all existing bindings (Caution! This can't be undone.)");
                 ImGui::BeginDisabled(this->all_cleared);
                 if (ImGui::Button("Clear All Bindings")) {
@@ -5887,7 +5889,7 @@ namespace overlay::windows {
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1),
+                ImGui::TextColored(TEXT_COLOR_PINK,
                     "Step 2: Pick which groups to apply");
                 ImGui::Spacing();
                 bool selection_changed = false;
@@ -5910,7 +5912,7 @@ namespace overlay::windows {
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Step 3: Pick devices to apply profiles");
+                ImGui::TextColored(TEXT_COLOR_PINK, "Step 3: Pick devices to apply profiles");
                 ImGui::Spacing();
                 ImGui::TextUnformatted("Hint: hold a button on the controller, it'll turn green in the drop down.");
                 ImGui::Spacing();
@@ -6025,7 +6027,7 @@ namespace overlay::windows {
                             bool active = sel > 0 && active_devices.count(target_options[sel]) > 0;
                             ImGui::AlignTextToFramePadding();
                             if (active) {
-                                ImGui::TextColored(ImVec4(0.f, 1.f, 0.f, 1.f), "%s", sources[si].c_str());
+                                ImGui::TextColored(TEXT_COLOR_BLUE, "%s", sources[si].c_str());
                             } else {
                                 ImGui::TextUnformatted(sources[si].c_str());
                             }
@@ -6053,7 +6055,7 @@ namespace overlay::windows {
                                         }
                                     }
                                     if (item_active) {
-                                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.f, 1.f, 0.f, 1.f));
+                                        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_COLOR_BLUE);
                                     }
                                     if (ImGui::Selectable(combo_label.c_str(), is_selected)) {
                                         template_target_selection[si] = ti;
@@ -6077,7 +6079,7 @@ namespace overlay::windows {
                             if (sel < 0) {
                                 ImGui::TextDisabled("--");
                             } else if (this->template_is_applied[si]) {
-                                ImGui::TextColored(ImVec4(0.f, 1.f, 0.f, 1.f), "Applied!");
+                                ImGui::TextColored(TEXT_COLOR_BLUE, "Applied!");
                             } else if (target_options[sel] == "Naive") {
                                 ImGui::TextUnformatted("Ready");
                             } else {
@@ -6085,7 +6087,7 @@ namespace overlay::windows {
                                 if (device) {
                                     ImGui::TextUnformatted("Ready");
                                 } else {
-                                    ImGui::TextColored(ImVec4(1.f, 0.5f, 0.f, 1.f), "Not found");
+                                    ImGui::TextColored(TEXT_COLOR_PINK, "Not found");
                                 }
                             }
                         }
@@ -6135,7 +6137,7 @@ namespace overlay::windows {
         ImGui::Separator();
         ImGui::Spacing();
         ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1), "Save Current Bindings as Preset");
+        ImGui::TextColored(TEXT_COLOR_PINK, "Save Current Bindings as Preset");
         ImGui::Spacing();
 
         ImGui::SetNextItemWidth(300);
@@ -6183,7 +6185,7 @@ namespace overlay::windows {
         if (ImGui::BeginPopupModal("Assign Labels##save", NULL, 0)) {
 
             ImGui::TextUnformatted("Assign a label to each source device.");
-            ImGui::TextColored(ImVec4(1.f, 0.7f, 0, 1),
+            ImGui::TextColored(TEXT_COLOR_PINK,
                 "Labels replace device IDs in the saved preset.");
             ImGui::Spacing();
 

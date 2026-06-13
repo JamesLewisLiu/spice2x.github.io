@@ -42,7 +42,7 @@ namespace overlay::windows {
     }
 
     void IOPanel::build_content() {
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.1f, 0.1f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.96f, 0.66f, 0.72f, 1.f));
         ImGui::PushID(this);
 
         ImGui::BeginGroup();
@@ -97,7 +97,7 @@ namespace overlay::windows {
 
         int pushed = 0;
         if (light && 0.5f < GameAPI::Lights::readLight(RI_MGR, *light)) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.72f, 0.15f, 0.00f, 0.9f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.96f, 0.66f, 0.72f, 0.9f));
             pushed += 1;
         }
 
