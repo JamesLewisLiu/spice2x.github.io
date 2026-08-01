@@ -1295,7 +1295,7 @@ void graphics_capture_skip(int screen) {
 
 bool graphics_capture_receive_jpeg(int screen, TooJpeg::WRITE_ONE_BYTE receiver,
         bool rgb, int quality, bool downsample, int divide, uint64_t *timestamp,
-        int *width, int *height, uint32_t timeout_ms) {
+        int *width, int *height) {
 
     if (screen < 0 || screen >= static_cast<int>(GRAPHICS_CAPTURE_SCREEN_NO)) {
         return false;
@@ -1305,7 +1305,7 @@ bool graphics_capture_receive_jpeg(int screen, TooJpeg::WRITE_ONE_BYTE receiver,
     std::unique_lock<std::mutex> lock(GRAPHICS_CAPTURE_BUFFER_M[screen]);
     const bool ready = GRAPHICS_CAPTURE_CV[screen].wait_for(
             lock,
-            timeout_ms ? std::chrono::milliseconds(timeout_ms) : GRAPHICS_CAPTURE_RECEIVE_TIMEOUT,
+            GRAPHICS_CAPTURE_RECEIVE_TIMEOUT,
             [screen] {
                 return GRAPHICS_CAPTURE_BUFFER[screen].data != nullptr
                     || GRAPHICS_CAPTURE_SKIP_SIGNAL[screen];
