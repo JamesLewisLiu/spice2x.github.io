@@ -1,7 +1,9 @@
 #include "capture.h"
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <utility>
 #include "external/rapidjson/document.h"
 #include "hooks/graphics/graphics.h"
 #include "util/crypt.h"
@@ -15,16 +17,17 @@ namespace api::modules {
     std::optional<uint32_t> CAPTURE_DIVIDE;
 
     static thread_local std::vector<uint8_t> CAPTURE_BUFFER;
+    static constexpr uint32_t CACHED_FRAME_WAIT_MS = 100;
 
     struct CachedFrame {
-        std::vector<uint8_t> jpeg;
+        std::string encoded;
         uint64_t timestamp = 0;
         int width = 0;
         int height = 0;
     };
 
     static std::mutex FRAME_CACHE_M;
-    static std::unordered_map<int, CachedFrame> FRAME_CACHE;
+    static std::unordered_map<int, std::shared_ptr<const CachedFrame>> FRAME_CACHE;
 
     static void add_jpeg_response(
             int screen,
@@ -44,24 +47,33 @@ namespace api::modules {
         res.add_data(data);
 
         std::lock_guard<std::mutex> lock(FRAME_CACHE_M);
-        FRAME_CACHE[screen] = {jpeg, timestamp, width, height};
+        FRAME_CACHE[screen] = std::make_shared<const CachedFrame>(CachedFrame {
+            std::move(encoded), timestamp, width, height
+        });
+    }
+
+    static bool has_cached_frame(int screen) {
+        std::lock_guard<std::mutex> lock(FRAME_CACHE_M);
+        const auto pos = FRAME_CACHE.find(screen);
+        return pos != FRAME_CACHE.end() && pos->second && !pos->second->encoded.empty();
     }
 
     static bool try_cached_response(int screen, Response &res) {
-        std::lock_guard<std::mutex> lock(FRAME_CACHE_M);
-        const auto pos = FRAME_CACHE.find(screen);
-        if (pos == FRAME_CACHE.end() || pos->second.jpeg.empty()) {
-            return false;
+        std::shared_ptr<const CachedFrame> cached;
+        {
+            std::lock_guard<std::mutex> lock(FRAME_CACHE_M);
+            const auto pos = FRAME_CACHE.find(screen);
+            if (pos == FRAME_CACHE.end() || !pos->second || pos->second->encoded.empty()) {
+                return false;
+            }
+            cached = pos->second;
         }
 
-        const auto &cached = pos->second;
-        auto encoded = crypt::base64_encode(cached.jpeg.data(), cached.jpeg.size());
-
         Value data;
-        data.SetString(encoded.c_str(), encoded.length(), res.doc()->GetAllocator());
-        res.add_data(cached.timestamp);
-        res.add_data(cached.width);
-        res.add_data(cached.height);
+        data.SetString(cached->encoded.c_str(), cached->encoded.length(), res.doc()->GetAllocator());
+        res.add_data(cached->timestamp);
+        res.add_data(cached->width);
+        res.add_data(cached->height);
         res.add_data(data);
         return true;
     }
@@ -120,10 +132,11 @@ namespace api::modules {
         uint64_t timestamp = 0;
         int width = 0;
         int height = 0;
+        const auto wait_ms = has_cached_frame(screen) ? CACHED_FRAME_WAIT_MS : 0;
         graphics_capture_trigger(screen);
         bool success = graphics_capture_receive_jpeg(screen, [] (uint8_t byte) {
             CAPTURE_BUFFER.push_back(byte);
-        }, true, quality, true, divide, &timestamp, &width, &height);
+        }, true, quality, true, divide, &timestamp, &width, &height, wait_ms);
 
         if (success) {
             add_jpeg_response(screen, timestamp, width, height, CAPTURE_BUFFER, res);

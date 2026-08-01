@@ -134,7 +134,7 @@ void graphics_capture_skip(int screen);
 bool graphics_capture_receive_jpeg(int screen, TooJpeg::WRITE_ONE_BYTE receiver,
         bool rgb = true, int quality = 80, bool downsample = true, int divide = 0,
         uint64_t *timestamp = nullptr,
-        int *width = nullptr, int *height = nullptr);
+        int *width = nullptr, int *height = nullptr, uint32_t timeout_ms = 0);
 std::string graphics_screenshot_genpath();
 
 // graphics_windowed.cpp
