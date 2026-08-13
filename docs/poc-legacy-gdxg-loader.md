@@ -221,6 +221,42 @@ revision uses the same ordering.
   `libvmrsvr.dll`, so a complete loader must port that implementation or provide
   an ABI-compatible replacement.
 
+### 2026-08-13 - GitHub Actions compilation failure diagnosis
+
+- The POC was committed and pushed at commit
+  `91e2b0cba5b0faa6386e7c19bd102dba5777ce7c`.
+- GitHub Actions run
+  [31672452203, job 94359769446](https://github.com/JamesLewisLiu/spice2x.github.io/actions/runs/31672452203/job/94359769446)
+  reached the `Compile` step and stopped while building
+  `avs/legacy_gdxg.cpp.obj`.
+- The reported compiler errors were:
+
+  ```text
+  legacy_gdxg.cpp:187:57: error: 'COINIT_MULTITHREADED' was not declared in this scope
+  legacy_gdxg.cpp:187:33: error: 'CoInitializeEx' was not declared in this scope
+  legacy_gdxg.cpp:225:13: error: 'CoUninitialize' was not declared in this scope
+  ```
+
+- Root cause: `legacy_gdxg.cpp` includes `<windows.h>` but does not explicitly
+  include the COM declarations. Under the CI MinGW configuration,
+  `<windows.h>` does not make these declarations available. Existing spice2x
+  sources that use the same APIs include `<objbase.h>` explicitly.
+- The focused source fix for the next work session is:
+
+  ```cpp
+  #include <windows.h>
+  #include <objbase.h>
+  ```
+
+- No source fix was included in this documentation-only checkpoint. After
+  adding the header, rerun the Windows build. The current failure occurs during
+  compilation, so it has not yet established whether an explicit `ole32` link
+  dependency is also needed. The repository already contains other COM API
+  users; only add `ole32` if the subsequent link step reports unresolved COM
+  symbols.
+- This failure is unrelated to the unresolved VMR bridge design. CI has not yet
+  compiled far enough to validate or reject that runtime implementation.
+
 ## Current POC status
 
 Implemented:
@@ -238,8 +274,8 @@ Not yet implemented or validated:
 
 - XG1's custom VMR surface allocator/image presenter bridge;
 - successful execution against the real XG1 files;
-- compilation, because no supported C++/MinGW toolchain is installed in the
-  current Windows or WSL environment;
+- a successful complete build: GitHub Actions reached the new adapter source
+  but currently fails because `legacy_gdxg.cpp` is missing `<objbase.h>`;
 - clean shutdown and both J32/J33 modes on real hardware/files.
 
 The branch is therefore a structural POC and investigation checkpoint, not yet
