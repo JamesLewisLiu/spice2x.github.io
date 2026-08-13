@@ -88,22 +88,24 @@ The POC adds a legacy backend to `avs::game`:
   interface to the rest of spice2x;
 - keep legacy state and cleanup isolated from the standard module path.
 
-The first runtime sequence is intentionally conservative. It will be refined
-from logs and debugger traces rather than silently assuming that every XG
-revision uses the same ordering.
+The runtime sequence and private render bridge are reconstructed from static
+analysis of the examined XG1 binaries. Other XG revisions may still differ and
+must be validated before treating the adapter as generally compatible.
 
 ## Risks and open questions
 
-1. Exact `gdxg.exe` window-class, dimensions, styles, and focus behavior still
-   need runtime tracing.
+1. The private Wizard, RenderEngine, and mixer ABIs are confirmed for the
+   examined XG1 files only. Other revisions may use different GUIDs or virtual
+   method layouts.
 2. The exact relationship between `boot_avs`, AVS-EA3 initialization, and the
-   legacy game loop must be confirmed on J32/J33.
-3. Return-value semantics for `boot_step` and `game_mainloop` require runtime
-   confirmation.
-4. Shutdown ordering must be tested to avoid AVS threads or graphics objects
+   legacy game loop must still be confirmed on live J32/J33 installations.
+3. Shutdown ordering must be tested to avoid AVS threads or graphics objects
    surviving module cleanup.
-5. Both GF (`J33`) and DM (`J32`) command-line/configuration paths must be
+4. Both GF (`J33`) and DM (`J32`) command-line/configuration paths must be
    validated.
+5. The replacement mixer reproduces the original control ABI and state
+   bookkeeping, but has not yet been exercised by real DirectShow source
+   graphs.
 
 ## Work log
 
@@ -257,6 +259,65 @@ revision uses the same ordering.
 - This failure is unrelated to the unresolved VMR bridge design. CI has not yet
   compiled far enough to validate or reject that runtime implementation.
 
+### 2026-08-14 - COM header fix verified
+
+- Added the required `<objbase.h>` include in commit
+  `edf26b742a4aaa0958a185a4619fc0799eb695bd`.
+- GitHub Actions run
+  [31724752154](https://github.com/JamesLewisLiu/spice2x.github.io/actions/runs/31724752154)
+  completed successfully. This established that the initial adapter compiles
+  and links in the repository's normal 32-bit, 64-bit, and compatibility build
+  matrix.
+
+### 2026-08-14 - IDA reconstruction of the private VMR bridge
+
+- Rechecked both `gdxg.exe` and `libvmrsvr.dll` through their existing IDA
+  databases without executing the game binaries.
+- Confirmed the startup sequence around the graphics bridge:
+  `CoInitializeEx(nullptr, 8)`, create the game window, create Wizard and
+  RenderEngine COM objects, attach the custom mixer, connect Wizard to the
+  RenderEngine, obtain the final engine and D3D9 device, call `SetD3DDevice`,
+  initialize/show the window, then pass the engine to `movie_set_render_engine`
+  after `game_initialize`.
+- Confirmed the XG1-private identifiers:
+  - Wizard CLSID `{8D372F4D-E0C0-464F-BDA9-963924890A35}` and IID
+    `{6D402155-D941-478A-BEBB-AF361F633851}`;
+  - RenderEngine CLSID `{9401081E-848A-4DA7-B6C1-9828BB493E4F}` and IID
+    `{6E474394-49FD-416F-AED4-0EDAD1879DC7}`;
+  - mixer IID `{6EE46528-3C31-43AF-B8B6-1C7A53A2E5C2}`.
+- Confirmed the virtual method slots used by `gdxg.exe`:
+  - RenderEngine factory slot 3 attaches the HWND and mixer;
+  - Wizard slots 3, 4, and 13 connect, stop, and retrieve the final engine;
+  - final-engine slots 10 and 11 retrieve the internal interface and D3D9
+    device.
+- Recovered the original `CGameMixer` secondary interface as a 12-slot COM
+  interface: `IUnknown`, attached-object setters/getters, initialize/terminate,
+  state check, D3D-device forwarding, and source add/remove methods. IDA also
+  confirmed the stack argument counts and HRESULT behavior used by the
+  replacement.
+- Confirmed additional host details: window class style `0x3020`, background
+  brush value 5, popup-visible style, 1280x720 client sizing, hidden cursor,
+  disabled IME context, foreground activation, debug-key forwarding, and no
+  artificial sleep in either the boot or game loop.
+
+### 2026-08-14 - VMR bridge implementation
+
+- Added `avs/legacy_gdxg_vmr.*` with an ABI-compatible dual-interface game
+  mixer and the private Wizard/RenderEngine orchestration.
+- Loads `libvmrsvr.dll` directly and calls its exported `DllGetClassObject`.
+  This preserves the COM class implementation while avoiding a dependency on
+  importing the installation's `required.reg` file into the host registry.
+- Forwards the recovered D3D9 device to `libgftools!SetD3DDevice` and exposes
+  the final render engine to `libmovie!movie_set_render_engine`.
+- Added the original debug-memory, timer-resolution, process-priority, window,
+  IME, debug-key, and foreground behavior to the legacy host path.
+- Keeps the full spice process command line alive while appending the selected
+  legacy `-d`/`-g` mode before forwarding it to the three legacy command-line
+  consumers.
+- Added explicit `ole32` linkage and the new VMR source to the build.
+- No game executable or DLL entry point was executed during this work. Runtime
+  validation remains outstanding.
+
 ## Current POC status
 
 Implemented:
@@ -268,15 +329,19 @@ Implemented:
 - J32/J33 GF/DM command-line forwarding;
 - legacy-compatible host window creation and `sys_window_initialize` call;
 - verified boot and game message-loop ordering;
+- private Wizard and RenderEngine construction without registry installation;
+- an ABI-compatible replacement for XG1's custom `CGameMixer`;
+- D3D9-device forwarding to `libgftools` and render-engine forwarding to
+  `libmovie`;
+- legacy debug-key, timer, priority, IME, and window-focus behavior;
 - per-step logging for field validation.
 
 Not yet implemented or validated:
 
-- XG1's custom VMR surface allocator/image presenter bridge;
 - successful execution against the real XG1 files;
-- a successful complete build: GitHub Actions reached the new adapter source
-  but currently fails because `legacy_gdxg.cpp` is missing `<objbase.h>`;
+- compilation of the newly added VMR implementation (the preceding adapter
+  revision has a successful complete GitHub Actions build);
 - clean shutdown and both J32/J33 modes on real hardware/files.
 
-The branch is therefore a structural POC and investigation checkpoint, not yet
-a claim of a bootable replacement for `gdxg.exe`.
+The branch is therefore an implementation POC and investigation checkpoint,
+not yet a claim of a runtime-validated replacement for `gdxg.exe`.

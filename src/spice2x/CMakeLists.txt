@@ -344,6 +344,7 @@ set(SOURCE_FILES ${SOURCE_FILES}
         avs/ea3.cpp
         avs/game.cpp
         avs/legacy_gdxg.cpp
+        avs/legacy_gdxg_vmr.cpp
         avs/automap.cpp
         avs/ssl.cpp
 
@@ -739,7 +740,7 @@ endfunction()
 
 add_library(spicetools_spice_objs OBJECT ${SOURCE_FILES})
 target_link_libraries(spicetools_spice_objs
-        PUBLIC d3d9 ws2_32 version comctl32 shlwapi iphlpapi hid secur32 setupapi psapi winmm winhttp
+        PUBLIC d3d9 ws2_32 version comctl32 shlwapi iphlpapi hid secur32 setupapi psapi winmm winhttp ole32
         PRIVATE fmt::fmt-header-only discord-rpc imgui hash-library minhook imm32 dwmapi CpuFeatures::cpu_features)
 target_link_libraries(spicetools_spice_objs PUBLIC winscard)
 
