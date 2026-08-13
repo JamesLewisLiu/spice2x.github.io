@@ -318,6 +318,16 @@ must be validated before treating the adapter as generally compatible.
 - No game executable or DLL entry point was executed during this work. Runtime
   validation remains outstanding.
 
+### 2026-08-14 - VMR bridge build verified
+
+- Committed and pushed the bridge implementation as
+  `0202adc357adaed23eb2c7ed189ade6b6d573679`.
+- GitHub Actions run
+  [31728713415](https://github.com/JamesLewisLiu/spice2x.github.io/actions/runs/31728713415)
+  completed successfully. The new mixer, private COM bootstrap, explicit
+  `ole32` dependency, and both 32/64-bit conditional paths compile and link in
+  the repository's complete CI build.
+
 ## Current POC status
 
 Implemented:
@@ -339,8 +349,6 @@ Implemented:
 Not yet implemented or validated:
 
 - successful execution against the real XG1 files;
-- compilation of the newly added VMR implementation (the preceding adapter
-  revision has a successful complete GitHub Actions build);
 - clean shutdown and both J32/J33 modes on real hardware/files.
 
 The branch is therefore an implementation POC and investigation checkpoint,
