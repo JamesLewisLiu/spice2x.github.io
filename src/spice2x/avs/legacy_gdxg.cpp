@@ -1,6 +1,7 @@
 #include "legacy_gdxg.h"
 
 #include <windows.h>
+#include <objbase.h>
 
 #include <string>
 
