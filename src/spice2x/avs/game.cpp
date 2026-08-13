@@ -1,5 +1,6 @@
 #include "game.h"
 
+#include "avs/legacy_gdxg.h"
 #include "launcher/launcher.h"
 #include "util/fileutils.h"
 #include "util/libutils.h"
@@ -69,6 +70,11 @@ namespace avs {
         }
 
         void load_dll() {
+            if (legacy_gdxg::enabled()) {
+                legacy_gdxg::load();
+                return;
+            }
+
             log_info("avs-game", "loading DLL '{}'", DLL_NAME);
 
             // load game instance
@@ -126,6 +132,10 @@ namespace avs {
         }
 
         bool entry_init(char *sid_code, void *app_param) {
+            if (legacy_gdxg::enabled()) {
+                return legacy_gdxg::entry_init(sid_code, app_param);
+            }
+
             auto current_entry_init = (ENTRY_INIT_T) libutils::get_proc(DLL_INSTANCE, ENTRY_INIT_NAME);
 
             if (dll_entry_init != current_entry_init) {
@@ -138,6 +148,11 @@ namespace avs {
         }
 
         void entry_main() {
+            if (legacy_gdxg::enabled()) {
+                legacy_gdxg::entry_main();
+                return;
+            }
+
             auto current_entry_main = (ENTRY_MAIN_T) libutils::get_proc(DLL_INSTANCE, ENTRY_MAIN_NAME);
 
             if (dll_entry_main != current_entry_main) {

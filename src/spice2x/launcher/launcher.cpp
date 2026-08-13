@@ -18,6 +18,7 @@
 #include "avs/core.h"
 #include "avs/ea3.h"
 #include "avs/game.h"
+#include "avs/legacy_gdxg.h"
 #include "build/defs.h"
 #include "cfg/spicecfg.h"
 #include "cfg/config.h"
@@ -2027,6 +2028,23 @@ int main_implementation(int argc, char *argv[]) {
                 attach_gitadora = true;
                 break;
             }
+
+#ifndef SPICE64
+            // Legacy GITADORA XG releases use an EXE host with boot.dll and
+            // game.dll rather than exporting the standard gdxg.dll entry API.
+            if (fileutils::file_exists(MODULE_PATH / "gdxg.exe") &&
+                check_dll("boot.dll") && check_dll("game.dll")) {
+                log_info("launcher", "detected legacy GITADORA gdxg.exe module layout");
+                avs::game::DLL_NAME = "gdxg.dll";
+                avs::legacy_gdxg::enable();
+                attach_io = true;
+                attach_device = true;
+                attach_extdev = true;
+                attach_ami2000 = true;
+                attach_gitadora = true;
+                break;
+            }
+#endif
 
             // Nostalgia
             if (check_dll("nostalgia.dll")) {

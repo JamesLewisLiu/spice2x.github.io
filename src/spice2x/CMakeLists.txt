@@ -343,6 +343,7 @@ set(SOURCE_FILES ${SOURCE_FILES}
         avs/core.cpp
         avs/ea3.cpp
         avs/game.cpp
+        avs/legacy_gdxg.cpp
         avs/automap.cpp
         avs/ssl.cpp
 
