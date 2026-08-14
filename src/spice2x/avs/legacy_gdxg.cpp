@@ -9,6 +9,7 @@
 #include <string>
 
 #include "avs/game.h"
+#include "hooks/graphics/graphics.h"
 #include "launcher/launcher.h"
 #include "util/libutils.h"
 #include "util/logging.h"
