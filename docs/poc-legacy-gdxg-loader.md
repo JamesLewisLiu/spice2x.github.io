@@ -97,8 +97,9 @@ must be validated before treating the adapter as generally compatible.
 1. The private Wizard, RenderEngine, and mixer ABIs are confirmed for the
    examined XG1 files only. Other revisions may use different GUIDs or virtual
    method layouts.
-2. The exact relationship between `boot_avs`, AVS-EA3 initialization, and the
-   legacy game loop must still be confirmed on live J32/J33 installations.
+2. Reusing spice's AVS runtime instead of calling the legacy `boot_avs` a
+   second time must be validated through the remaining EA3 and game boot
+   stages on live J32/J33 installations.
 3. Shutdown ordering must be tested to avoid AVS threads or graphics objects
    surviving module cleanup.
 4. Both GF (`J33`) and DM (`J32`) command-line/configuration paths must be
@@ -372,6 +373,33 @@ must be validated before treating the adapter as generally compatible.
   a candidate for the AVS fatal, but the next runtime log must capture the
   actual fatal/assert text before changing configuration behavior.
 
+### 2026-08-14 - Duplicate AVS boot and legacy windowed mode
+
+- The diagnostic build no longer hung while creating a minidump. It continued
+  through every VMR bridge step and reached EA3 boot, but the same AVS
+  breakpoint was still raised.
+- IDA resolved the exact fatal path as the AVS time worker calling
+  `avs_thread_delay`, which failed `TlsGetValue` and reported
+  `thread_get_self(from delay): unknown Win32 thread`.
+- Direct analysis of `boot.dll!boot_avs` confirmed that it is not a stub. It
+  allocates separate 32 MiB/8 MiB heaps and calls `libavs-win32!avs_boot` with
+  a second minimal configuration and no output callback.
+- The adapter had already allowed spice to boot the same AVS DLL before calling
+  `boot_avs`. The second boot replaces AVS's global thread TLS index while the
+  first boot's time worker is still running, which explains both the unknown
+  thread fatal and why that fatal bypassed spice's output callback.
+- Removed the duplicate `boot_avs` invocation and retained the already active
+  spice AVS runtime. The HTTPS/SSL configuration mismatch was therefore not
+  the cause of this breakpoint, though it may still affect later network boot.
+- The runtime log showed `-w` active in the merged spice options while
+  `msvcrt!__argc` contained only two process arguments. This occurs when `-w`
+  comes from spicecfg: `GetCommandLineA()` does not contain the merged option,
+  so the three legacy command-line consumers never received it.
+- Windowed mode now explicitly adds `-w` to the forwarded legacy command line
+  when it was not present in the process arguments. It also creates a standard
+  decorated window with a 1280x720 client area and leaves the cursor visible.
+  The original popup window behavior remains unchanged without `-w`.
+
 ## Current POC status
 
 Implemented:
@@ -382,6 +410,9 @@ Implemented:
 - decorated entry-point resolution with fatal diagnostics;
 - J32/J33 GF/DM command-line forwarding;
 - legacy-compatible host window creation and `sys_window_initialize` call;
+- explicit `-w` forwarding and decorated host-window creation for windowed
+  mode;
+- reuse of the spice-owned AVS runtime without a destructive second AVS boot;
 - verified boot and game message-loop ordering;
 - private Wizard and RenderEngine construction without registry installation;
 - an ABI-compatible replacement for XG1's custom `CGameMixer`;

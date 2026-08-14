@@ -18,7 +18,6 @@ namespace avs::legacy_gdxg {
     static bool ENABLED = false;
 
 #ifndef SPICE64
-    using boot_avs_t = int (__cdecl *)();
     using boot_main_t = void (__cdecl *)(HWND);
     using boot_step_t = int (__cdecl *)();
     using boot_terminate_t = void (__cdecl *)();
@@ -44,7 +43,6 @@ namespace avs::legacy_gdxg {
     static bool com_initialized = false;
     static std::string legacy_cmdline;
 
-    static boot_avs_t boot_avs = nullptr;
     static boot_main_t boot_main = nullptr;
     static boot_step_t boot_step = nullptr;
     static boot_terminate_t boot_terminate = nullptr;
@@ -61,7 +59,6 @@ namespace avs::legacy_gdxg {
     static vmr::set_d3d_device_t set_d3d_device = nullptr;
     static movie_set_render_engine_t movie_set_render_engine = nullptr;
 
-    static constexpr auto BOOT_AVS_NAME = "?boot_avs@@YAHXZ";
     static constexpr auto BOOT_MAIN_NAME = "?boot_main@@YAXPAUHWND__@@@Z";
     static constexpr auto BOOT_STEP_NAME = "?boot_step@@YAHXZ";
     static constexpr auto BOOT_TERMINATE_NAME = "?boot_terminate@@YAXXZ";
@@ -121,14 +118,16 @@ namespace avs::legacy_gdxg {
             log_fatal("legacy-gdxg", "RegisterClassExA failed: {}", GetLastError());
         }
 
-        const DWORD style = WS_POPUP | WS_VISIBLE;
+        const bool windowed = GRAPHICS_WINDOWED;
+        const DWORD style = windowed ? WS_OVERLAPPEDWINDOW | WS_VISIBLE : WS_POPUP | WS_VISIBLE;
+        const int position = windowed ? CW_USEDEFAULT : 0;
         auto hwnd = CreateWindowExA(
                 0,
                 CLASS_NAME,
                 "GFDM",
                 style,
-                0,
-                0,
+                position,
+                position,
                 1280,
                 720,
                 nullptr,
@@ -151,15 +150,41 @@ namespace avs::legacy_gdxg {
                     (window_rect.bottom - window_rect.top) - client_rect.bottom + 720,
                     SWP_NOMOVE | SWP_FRAMECHANGED);
         }
-        ShowCursor(FALSE);
+        if (!windowed) {
+            ShowCursor(FALSE);
+        }
+        log_info("legacy-gdxg", "created {} game window with 1280x720 client area",
+                windowed ? "windowed" : "popup");
         ImmAssociateContext(hwnd, nullptr);
         return hwnd;
+    }
+
+    static bool process_has_argument(const char *name) {
+        for (int i = 1; i < LAUNCHER_ARGC; i++) {
+            auto argument = LAUNCHER_ARGV[i];
+            while (*argument == '-') {
+                argument++;
+            }
+            if (_stricmp(argument, name) == 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static void set_legacy_cmdline(const char *sid_code) {
         // J32 is DrumMania and J33 is GuitarFreaks in the examined XG1 set.
         const auto mode = sid_code && _strnicmp(sid_code, "J33", 3) == 0 ? "-g" : "-d";
         legacy_cmdline = GetCommandLineA();
+        if (GRAPHICS_WINDOWED && !process_has_argument("w")) {
+            // The merged -w option may come from spicecfg rather than the
+            // process command line. The legacy libraries only see the string
+            // supplied through these setters, so synthesize it explicitly.
+            legacy_cmdline += " -w";
+        }
+        if (GRAPHICS_WINDOWED) {
+            log_info("legacy-gdxg", "legacy window mode argument: -w");
+        }
         legacy_cmdline += ' ';
         legacy_cmdline += mode;
         log_info("legacy-gdxg", "legacy game mode argument: {}", mode);
@@ -203,7 +228,6 @@ namespace avs::legacy_gdxg {
         gftools_module = libutils::load_library(MODULE_PATH / "libgftools.dll");
         movie_module = libutils::load_library(MODULE_PATH / "libmovie.dll");
 
-        boot_avs = libutils::get_proc<boot_avs_t>(boot_module, BOOT_AVS_NAME);
         boot_main = libutils::get_proc<boot_main_t>(boot_module, BOOT_MAIN_NAME);
         boot_step = libutils::get_proc<boot_step_t>(boot_module, BOOT_STEP_NAME);
         boot_terminate = libutils::get_proc<boot_terminate_t>(boot_module, BOOT_TERMINATE_NAME);
@@ -241,11 +265,11 @@ namespace avs::legacy_gdxg {
         return false;
 #else
         (void) app_param;
-        // boot_avs is a legacy stub in the examined builds. Keep the call for
-        // parity with gdxg.exe and log its result instead of treating zero as a
-        // failure.
-        const auto boot_avs_result = boot_avs();
-        log_info("legacy-gdxg", "boot_avs returned {}", boot_avs_result);
+        // boot.dll!boot_avs creates separate heaps and calls avs_boot again.
+        // Spice has already booted this same AVS instance, and booting it twice
+        // replaces its TLS index while the first set of worker threads is still
+        // running. Reuse the active runtime instead.
+        log_info("legacy-gdxg", "reusing spice AVS runtime; skipping duplicate boot_avs");
         sys_debug_mem_initialize();
 
         set_legacy_cmdline(sid_code);
