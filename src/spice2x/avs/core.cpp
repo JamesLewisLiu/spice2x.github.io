@@ -1315,6 +1315,21 @@ namespace avs {
                 case 'F':
                     style = logger::Style::RED;
                     deferredlogs::report_fatal_message();
+
+                    // The legacy AVS abort callback raises an INT3 immediately after
+                    // emitting a fatal message. Write and flush that message here so
+                    // it survives even if the asynchronous logger cannot drain before
+                    // the process enters exception handling.
+                    if (file != nullptr && file != INVALID_HANDLE_VALUE) {
+                        DWORD bytes_written = 0;
+                        WriteFile(
+                                file,
+                                out.data(),
+                                static_cast<DWORD>(out.size()),
+                                &bytes_written,
+                                nullptr);
+                        FlushFileBuffers(file);
+                    }
                     break;
                 case 'W':
                     style = logger::Style::YELLOW;

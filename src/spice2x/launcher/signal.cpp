@@ -345,6 +345,15 @@ static void log_exception_context(struct _EXCEPTION_POINTERS *ExceptionInfo, DWO
 }
 
 static void write_minidump(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+    // Legacy AVS implements its default fatal abort callback with INT3. On the
+    // affected 32-bit runtime, asking DbgHelp to suspend and inspect the AVS
+    // worker threads at this breakpoint can hang indefinitely and leave a
+    // zero-byte dump. Keep the remaining exception diagnostics usable instead.
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT) {
+        log_warning("signal", "skipping minidump for breakpoint exception");
+        return;
+    }
+
     if (MiniDumpWriteDump_local == nullptr) {
         log_warning("signal", "minidump creation function not available, skipping");
         return;

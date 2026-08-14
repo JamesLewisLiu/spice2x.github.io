@@ -344,6 +344,34 @@ must be validated before treating the adapter as generally compatible.
 - Runtime validation must continue with a CI-built executable containing this
   parser fix.
 
+### 2026-08-14 - Legacy AVS fatal breakpoint diagnosed
+
+- The next CI build passed the EA3-ident parsing stage and successfully created
+  both the private VMR Wizard and RenderEngine.
+- The process then raised `EXCEPTION_BREAKPOINT` at
+  `libavs-win32.dll+0x6c87`. IDA analysis identified the containing export as
+  `log_default_abort`; its implementation deliberately executes `INT3`.
+- `log_body_fatal` first emits the fatal/assert text through the AVS output
+  callback, calls the configured abort callback, and then loops forever. Merely
+  replacing the abort callback with a no-op would therefore hide the exception
+  without making the failed AVS state usable.
+- The legacy VMR factory calls and replacement mixer's secondary vtable were
+  rechecked against `gdxg.exe`. `libvmrsvr.dll` also does not import AVS, so the
+  breakpoint came from a separate AVS worker thread and does not by itself
+  identify the VMR bridge as the cause.
+- The fatal text was lost because the old AVS callback queued it to the
+  asynchronous spice logger immediately before raising the breakpoint. The
+  exception handler then hung inside `MiniDumpWriteDump` and left a zero-byte
+  `minidump.dmp`.
+- Updated the old AVS output callback to synchronously write and flush fatal
+  messages to its supplied log handle before queueing them. Breakpoint
+  exceptions now skip minidump generation so the remaining exception
+  diagnostics and normal termination path can proceed.
+- The generated configuration currently combines `ssl=0` with an HTTPS
+  services URL, unlike the original installation's HTTP services URL. This is
+  a candidate for the AVS fatal, but the next runtime log must capture the
+  actual fatal/assert text before changing configuration behavior.
+
 ## Current POC status
 
 Implemented:
