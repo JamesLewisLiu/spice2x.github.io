@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "external/robin_hood.h"
+#include "avs/legacy_gdxg.h"
 #include "games/popn/popn.h"
 #include "launcher/logger.h"
 #include "launcher/signal.h"
@@ -2061,6 +2062,19 @@ namespace avs {
             property_search_remove_safe(config, config_node, "/sntp/ea_on");
             property_node_create(config, config_node,
                     NODE_TYPE_bool, "/sntp/ea_on", 0);
+
+#ifndef SPICE64
+            if (legacy_gdxg::enabled()) {
+                // XG1's boot.dll enables AVS protocol 2, the IPv4 RAW socket
+                // backend used by EA3 keepalive. Reproduce that part of its
+                // configuration during the spice-owned AVS boot instead of
+                // calling boot_avs later and corrupting AVS's global TLS state.
+                property_search_remove_safe(config, config_node, "/net/enable_raw");
+                property_node_create(config, config_node,
+                        NODE_TYPE_bool, "/net/enable_raw", 1);
+                log_info("avs-core", "enabled legacy GDXG AVS raw network protocol");
+            }
+#endif
 
             // check heap size
             if (HEAP_SIZE <= 0) {

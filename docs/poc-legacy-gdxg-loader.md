@@ -399,6 +399,14 @@ must be validated before treating the adapter as generally compatible.
   when it was not present in the process arguments. It also creates a standard
   decorated window with a 1280x720 client area and leaves the cursor visible.
   The original popup window behavior remains unchanged without `-w`.
+- The next live run confirmed that duplicate AVS boot removal fixed the time
+  worker TLS failure and that both `-w` forwarding and the decorated window
+  were active. EA3 then failed in `avs_keepalive_boot` because AVS protocol 2
+  was not registered. IDA identified protocol 2 as the IPv4 RAW socket backend:
+  XG1's `boot_avs` enables it through `/config/net/enable_raw`, while the
+  existing `prop/avs-config.xml` omits that property. The spice-owned AVS boot
+  now enables `/net/enable_raw` for the legacy GDXG layout, preserving the
+  required protocol registration without invoking a second `avs_boot`.
 
 ## Current POC status
 
