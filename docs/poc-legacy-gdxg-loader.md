@@ -328,6 +328,22 @@ must be validated before treating the adapter as generally compatible.
   `ole32` dependency, and both 32/64-bit conditional paths compile and link in
   the repository's complete CI build.
 
+### 2026-08-14 - First runtime attempt: empty EA3 ext crash
+
+- The first live launch produced `minidump.dmp` before any game module was
+  loaded and before the current logger could replace the old `log.txt`.
+- Minidump analysis found a null read in the 32-bit UCRT `strlen` routine. The
+  caller was the launcher's EA3-ident parser, not the legacy GDXG or VMR code.
+- The examined `prop/ea3-ident.xml` contains an empty
+  `<ext __type="str"></ext>` element. TinyXML returns `nullptr` from
+  `GetText()` for this valid empty element, and the launcher assigned that
+  pointer directly to `std::string`.
+- Updated both EA3 configuration parsing paths and bootstrap release-code
+  parsing to treat an empty XML element as an empty string. A missing/empty
+  model remains an identification failure instead of being accepted.
+- Runtime validation must continue with a CI-built executable containing this
+  parser fix.
+
 ## Current POC status
 
 Implemented:

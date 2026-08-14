@@ -3691,7 +3691,8 @@ std::string launcher::detect_bootstrap_release_code(const std::string& bootstrap
     if (node_root) {
         auto node_release_code = node_root->FirstChildElement("release_code");
         if (node_release_code) {
-            return node_release_code->GetText();
+            const auto text = node_release_code->GetText();
+            return text ? text : "";
         }
     }
 
@@ -3728,24 +3729,31 @@ static launcher::GameVersion detect_gameversion_ident(const std::string& bootstr
             bool error = true;
             auto node_model = node_soft->FirstChildElement("model");
             if (node_model) {
-                version.model = node_model->GetText();
-                error = false;
+                const auto text = node_model->GetText();
+                if (text) {
+                    version.model = text;
+                    error = false;
+                }
             }
             auto node_dest = node_soft->FirstChildElement("dest");
             if (node_dest) {
-                version.dest = node_dest->GetText();
+                const auto text = node_dest->GetText();
+                version.dest = text ? text : "";
             }
             auto node_spec = node_soft->FirstChildElement("spec");
             if (node_spec) {
-                version.spec = node_spec->GetText();
+                const auto text = node_spec->GetText();
+                version.spec = text ? text : "";
             }
             auto node_rev = node_soft->FirstChildElement("rev");
             if (node_rev) {
-                version.rev = node_rev->GetText();
+                const auto text = node_rev->GetText();
+                version.rev = text ? text : "";
             }
             auto node_ext = node_soft->FirstChildElement("ext");
             if (node_ext) {
-                version.ext = node_ext->GetText();
+                const auto text = node_ext->GetText();
+                version.ext = text ? text : "";
                 auto bootstrap_ext = launcher::detect_bootstrap_release_code(bootstrap_user);
                 if (version.ext.size() != 10 && bootstrap_ext.size() == 10) {
                     version.ext = bootstrap_ext;
@@ -3849,24 +3857,31 @@ launcher::GameVersion launcher::detect_gameversion(const std::string &ea3_user, 
             bool error = true;
             auto node_model = node_soft->FirstChildElement("model");
             if (node_model) {
-                version.model = node_model->GetText();
-                error = false;
+                const auto text = node_model->GetText();
+                if (text) {
+                    version.model = text;
+                    error = false;
+                }
             }
             auto node_dest = node_soft->FirstChildElement("dest");
             if (node_dest) {
-                version.dest = node_dest->GetText();
+                const auto text = node_dest->GetText();
+                version.dest = text ? text : "";
             }
             auto node_spec = node_soft->FirstChildElement("spec");
             if (node_spec) {
-                version.spec = node_spec->GetText();
+                const auto text = node_spec->GetText();
+                version.spec = text ? text : "";
             }
             auto node_rev = node_soft->FirstChildElement("rev");
             if (node_rev) {
-                version.rev = node_rev->GetText();
+                const auto text = node_rev->GetText();
+                version.rev = text ? text : "";
             }
             auto node_ext = node_soft->FirstChildElement("ext");
             if (node_ext) {
-                version.ext = node_ext->GetText();
+                const auto text = node_ext->GetText();
+                version.ext = text ? text : "";
                 auto bootstrap_ext = launcher::detect_bootstrap_release_code(bootstrap_user);
                 if (version.ext.size() != 10 && bootstrap_ext.size() == 10) {
                     version.ext = bootstrap_ext;
