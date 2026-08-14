@@ -2069,10 +2069,18 @@ namespace avs {
                 // backend used by EA3 keepalive. Reproduce that part of its
                 // configuration during the spice-owned AVS boot instead of
                 // calling boot_avs later and corrupting AVS's global TLS state.
-                property_search_remove_safe(config, config_node, "/net/enable_raw");
-                property_node_create(config, config_node,
-                        NODE_TYPE_bool, "/net/enable_raw", 1);
-                log_info("avs-core", "enabled legacy GDXG AVS raw network protocol");
+                auto net_node = property_search_safe(config, config_node, "/net");
+                property_search_remove_safe(config, net_node, "enable_raw");
+                auto enable_raw_node = property_node_create(config, net_node,
+                        NODE_TYPE_bool, "enable_raw", 1);
+                uint8_t enable_raw = 0;
+                const auto enable_raw_result = property_node_refer(config, net_node,
+                        "enable_raw", NODE_TYPE_bool, &enable_raw, sizeof(enable_raw));
+                if (!enable_raw_node || enable_raw_result <= 0 || enable_raw != 1) {
+                    log_fatal("avs-core", "failed to configure legacy GDXG AVS raw network protocol");
+                }
+                log_info("avs-core", "enabled legacy GDXG AVS raw network protocol (verified={})",
+                        enable_raw);
             }
 #endif
 

@@ -407,6 +407,12 @@ must be validated before treating the adapter as generally compatible.
   existing `prop/avs-config.xml` omits that property. The spice-owned AVS boot
   now enables `/net/enable_raw` for the legacy GDXG layout, preserving the
   required protocol registration without invoking a second `avs_boot`.
+- The first configuration injection logged as executed but protocol 2 remained
+  unregistered. The legacy AVS parameter map resolves `net/enable_raw`
+  relative to the `/config` node. The adapter now obtains `/config/net`,
+  creates the `enable_raw` child relative to that node, and reads it back as a
+  boolean before calling `avs_boot`, avoiding ambiguous leading-slash path
+  handling in the legacy property API.
 
 ## Current POC status
 
