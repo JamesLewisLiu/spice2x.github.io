@@ -469,6 +469,11 @@ static long __cdecl gfdm_unit_get_input_p(int device, size_t player) {
         if (device == 1)
             return 0;
 
+        // coin (raw input bit 0x10, read by dm_input_coin / TEST I/O coin check)
+        if (Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[2]))) {
+            ret |= 0x10;
+        }
+
         // hi hat
         if (Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[25])) ||
                 Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[26])) ||
@@ -521,6 +526,11 @@ static long __cdecl gfdm_unit_get_input_p(int device, size_t player) {
     // guitar freaks
     if (games::gitadora::is_guitar()) {
         auto offset = player * 11;
+
+        // coin (raw input bit 0x10, read by gf_input_coin / TEST I/O coin check)
+        if (device == 0 && Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[2]))) {
+            ret |= 0x10;
+        }
 
         const auto pick_up = Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[3 + offset]));
         const auto pick_down = Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[4 + offset]));
