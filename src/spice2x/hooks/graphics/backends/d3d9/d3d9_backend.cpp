@@ -944,9 +944,12 @@ HRESULT STDMETHODCALLTYPE WrappedIDirect3D9::CreateDevice(
     } else if (!D3D9_DEVICE_HOOK_DISABLE) {
         graphics_hook_window(hFocusWindow, pPresentationParameters);
 
-        *ppReturnedDeviceInterface = new WrappedIDirect3DDevice9(
+        auto *wrapped = new WrappedIDirect3DDevice9(
                 hFocusWindow,
                 *ppReturnedDeviceInterface);
+
+        wrapped->device_multithreaded = (BehaviorFlags & D3DCREATE_MULTITHREADED) != 0;
+        *ppReturnedDeviceInterface = wrapped;
     }
 
     // return result
@@ -1307,12 +1310,15 @@ HRESULT STDMETHODCALLTYPE WrappedIDirect3D9::CreateDeviceEx(
     } else if (!D3D9_DEVICE_HOOK_DISABLE) {
         graphics_hook_window(hFocusWindow, pPresentationParameters);
 
-        *ppReturnedDeviceInterface = new WrappedIDirect3DDevice9(
+        auto *wrapped = new WrappedIDirect3DDevice9(
                 hFocusWindow,
                 *ppReturnedDeviceInterface,
                 gfdm_parameters.logical_small_swapchain,
                 gfdm_two_head_exclusive() ? static_cast<IDirect3D9 *>(this) : nullptr,
                 gfdm_two_head_exclusive() ? pPresentationParameters : nullptr);
+
+        wrapped->device_multithreaded = (BehaviorFlags & D3DCREATE_MULTITHREADED) != 0;
+        *ppReturnedDeviceInterface = wrapped;
 
         // initialize sub screen if the game requested a multi-head context
         if (avs::game::is_model({"LDJ", "KFC", "M39", "M32"}) &&
@@ -1520,6 +1526,10 @@ void graphics_d3d9_on_present(
         graphics_d3d9_process_screenshot(device, wrapped_device);
     }
 
+    // API capture always includes the overlay; it must run before the subscreen present
+    // below, which leaves the arena SMALL back buffer black
+    graphics_d3d9_process_capture(device, wrapped_device);
+
     // for IIDX TDJ / SDVX UFC, handle subscreen
     const bool is_vm = games::sdvx::is_valkyrie_model();
     const bool is_tdj = avs::game::is_model("LDJ") && games::iidx::TDJ_MODE;
@@ -1533,9 +1543,6 @@ void graphics_d3d9_on_present(
     if (is_mfc) {
         wintouchemu::update();
     }
-
-    // API capture always includes the overlay
-    graphics_d3d9_process_capture(device, wrapped_device);
 }
 
 void update_backbuffer_dimensions(D3DPRESENT_PARAMETERS *params) {

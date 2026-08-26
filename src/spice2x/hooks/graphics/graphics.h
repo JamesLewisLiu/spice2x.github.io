@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <string>
 #include <vector>
 #include <optional>
@@ -11,8 +12,6 @@
 #if !SPICE_XP
 #include <dwmapi.h>
 #endif
-
-#include "external/toojpeg/toojpeg.h"
 
 // order must match spice2x_AutoOrientation UI enum order
 enum graphics_orientation {
@@ -121,6 +120,7 @@ extern bool D3D9_DEVICE_HOOK_DISABLE;
 
 void graphics_init();
 void graphics_hook_window(HWND hWnd, D3DPRESENT_PARAMETERS *pPresentationParameters);
+bool graphics_gitadora_has_dedicated_subscreen();
 // The native GITADORA two-head D3D9 group uses the game's named SMALL
 // device window for the native physical SMALL head. The game requests
 // D3DCREATE_NOWINDOWCHANGES, so this host must be made borderless and sized
@@ -139,12 +139,24 @@ void graphics_screens_get(std::vector<int> &screens);
 void graphics_poll_screenshot_hotkey();
 void graphics_screenshot_trigger();
 bool graphics_screenshot_consume();
+
+inline constexpr size_t GRAPHICS_CAPTURE_SCREEN_NO = 4;
+
 void graphics_capture_trigger(int screen);
 bool graphics_capture_consume(int *screen);
 void graphics_capture_enqueue(int screen, uint8_t *data, size_t width, size_t height);
 void graphics_capture_skip(int screen);
-bool graphics_capture_receive_jpeg(int screen, TooJpeg::WRITE_ONE_BYTE receiver,
-        bool rgb = true, int quality = 80, bool downsample = true, int divide = 0,
+// size of the last frame captured off this screen, before any caller side downscale; false
+// until one has been captured, so it cannot report a size for a screen the game never drew
+bool graphics_capture_last_size(int screen, int *width, int *height);
+// on success `out` owns packed 24bpp RGB pixels, width * height * 3 bytes
+bool graphics_capture_receive_raw(int screen, std::shared_ptr<uint8_t[]> &out,
+        int divide = 0,
+        uint64_t *timestamp = nullptr,
+        int *width = nullptr, int *height = nullptr);
+// on success `out` holds the encoded JPEG; its storage is reused across calls
+bool graphics_capture_receive_jpeg(int screen, std::vector<uint8_t> &out,
+        int quality = 80, int divide = 0,
         uint64_t *timestamp = nullptr,
         int *width = nullptr, int *height = nullptr);
 // the returned path is for screen 0; any extra screens only reserve their suffixed names

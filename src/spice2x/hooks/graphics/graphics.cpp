@@ -20,6 +20,7 @@
 #include "games/io.h"
 #include "games/sdvx/sdvx.h"
 #include "games/popn/popn.h"
+#include "hooks/graphics/jpeg_encoder.h"
 #include "hooks/graphics/backends/d3d9/d3d9_backend.h"
 #include "hooks/graphics/backends/d3d11/d3d11_backend.h"
 #include "launcher/shutdown.h"
@@ -33,6 +34,7 @@
 #include "util/utils.h"
 #include "misc/wintouchemu.h"
 #include "touch/native/inject.h"
+#include "touch/native/nativetouchhook.h"
 #include "util/time.h"
 #include "rawinput/rawinput.h"
 
@@ -63,7 +65,6 @@ static bool GRAPHICS_SCREENSHOT_TRIGGER = false;
 static std::set<int> GRAPHICS_SCREENS { 0 };
 static std::mutex GRAPHICS_SCREENS_M {};
 static std::vector<int> GRAPHICS_CAPTURE_SCREENS;
-static const size_t GRAPHICS_CAPTURE_SCREEN_NO = 4;
 static std::mutex GRAPHICS_CAPTURE_SCREENS_M {};
 static CaptureData GRAPHICS_CAPTURE_BUFFER[GRAPHICS_CAPTURE_SCREEN_NO] {};
 static std::mutex GRAPHICS_CAPTURE_BUFFER_M[GRAPHICS_CAPTURE_SCREEN_NO] {};
@@ -216,6 +217,18 @@ static void gitadora_remember_window(HWND hWnd, const std::string &window_name) 
     } else if (window_name == "SMALL") {
         GFDM_SUBSCREEN_WINDOW = hWnd;
     }
+
+    // touch belongs to the SMALL panel when it exists, otherwise to the main window
+    // that draws the subscreen overlay
+    const bool hosts_touch = window_name == "SMALL" ||
+        (window_name == "GITADORA" && !graphics_gitadora_has_dedicated_subscreen());
+    if (nativetouch::is_hooked() && hWnd != nullptr && hosts_touch) {
+        nativetouch::inject::set_preferred_injection_window(hWnd);
+    }
+}
+
+bool graphics_gitadora_has_dedicated_subscreen() {
+    return GFDM_SUBSCREEN_WINDOW != nullptr;
 }
 
 bool graphics_gitadora_prepare_two_head_device_window(
@@ -616,8 +629,10 @@ static HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPC
         }
     }
 
+    const bool is_sdvx = avs::game::is_model("KFC");
     bool is_tdj_sub_window = avs::game::is_model("LDJ") && window_name.ends_with(" sub");
-    bool is_sdvx_sub_window = avs::game::is_model("KFC") && window_name.ends_with(" Sub Screen");
+    bool is_sdvx_sub_window = is_sdvx && window_name.ends_with(" Sub Screen");
+    bool is_sdvx_main_window = is_sdvx && window_name.ends_with(" Main Screen");
     bool is_popn_sub_window = avs::game::is_model("M39") && window_name.ends_with("Sub Screen");
     const std::string gfdm_window_name = games::gitadora::is_arena_model()
         ? gitadora_canonical_window_name(effective_window_name)
@@ -720,6 +735,20 @@ static HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPC
         graphics_hook_subscreen_window(SDVX_SUBSCREEN_WINDOW);
     }
 
+    // SDVX registers touch on both windows, so name the one synthetic touches must land on
+    // instead of letting window creation order decide: the sub screen window when windowed,
+    // the main window in fullscreen since the game reads it in primary-display coordinates
+    if (nativetouch::is_hooked() &&
+        result != nullptr &&
+        (GRAPHICS_WINDOWED ? is_sdvx_sub_window : is_sdvx_main_window)) {
+        log_misc(
+            "graphics",
+            "SDVX touch surface is {}, {}",
+            fmt::ptr(result),
+            window_name);
+        nativetouch::inject::set_preferred_injection_window(result);
+    }
+
     // only hook touch window if multiple windows are allowed
     if (gfdm_window_name == "LEFT" || gfdm_window_name == "RIGHT") {
         gitadora_remember_window(result, gfdm_window_name);
@@ -730,6 +759,11 @@ static HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPC
         gitadora_remember_window(result, gfdm_window_name);
         if (GRAPHICS_WINDOWED && !GRAPHICS_PREVENT_SECONDARY_WINDOWS) {
             graphics_hook_subscreen_window(GFDM_SUBSCREEN_WINDOW);
+        }
+
+        // the dedicated SMALL window is the touch panel; mouse and API touch target it
+        if (nativetouch::is_hooked() && result != nullptr) {
+            nativetouch::inject::register_and_attach_window(result);
         }
     }
     if (is_gfdm_window && GRAPHICS_WINDOWED && !GRAPHICS_PREVENT_SECONDARY_WINDOWS) {
@@ -1104,6 +1138,15 @@ static BOOL WINAPI ShowWindow_hook(HWND hWnd, int nCmdShow) {
         return true;
     }
 
+    // fullscreen SDVX keeps two adapters so the subscreen overlay can draw, so the game still
+    // creates the sub window even when the user asked for it to be gone
+    if (avs::game::is_model("KFC") &&
+        GRAPHICS_PREVENT_SECONDARY_WINDOWS &&
+        hWnd == SDVX_SUBSCREEN_WINDOW) {
+        log_info("graphics", "ShowWindow_hook - hiding sub window {}", fmt::ptr(hWnd));
+        return true;
+    }
+
     // call original
     return ShowWindow_orig(hWnd, nCmdShow);
 }
@@ -1320,7 +1363,9 @@ void graphics_hook_window(HWND hWnd, D3DPRESENT_PARAMETERS *pPresentationParamet
         const bool native_touch_overlay =
             (games::iidx::NATIVE_TOUCH && games::iidx::TDJ_MODE && !GRAPHICS_IIDX_WSUB) ||
             (games::popn::NATIVE_TOUCH &&
-             games::popn::is_pikapika_model() && GRAPHICS_PREVENT_SECONDARY_WINDOWS);
+             games::popn::is_pikapika_model() && GRAPHICS_PREVENT_SECONDARY_WINDOWS) ||
+            (games::gitadora::NATIVE_TOUCH &&
+             games::gitadora::is_arena_model() && GRAPHICS_PREVENT_SECONDARY_WINDOWS);
         if (native_touch_overlay) {
             nativetouch::inject::register_and_attach_window(hWnd);
         }
@@ -1436,9 +1481,32 @@ void graphics_capture_skip(int screen) {
     GRAPHICS_CAPTURE_CV[screen].notify_one();
 }
 
-bool graphics_capture_receive_jpeg(int screen, TooJpeg::WRITE_ONE_BYTE receiver,
-        bool rgb, int quality, bool downsample, int divide, uint64_t *timestamp,
+bool graphics_capture_last_size(int screen, int *width, int *height) {
+    if (screen < 0 || screen >= static_cast<int>(GRAPHICS_CAPTURE_SCREEN_NO)) {
+        return false;
+    }
+
+    // consuming a frame clears the pixels but leaves the size, so this survives the read
+    std::lock_guard<std::mutex> lock(GRAPHICS_CAPTURE_BUFFER_M[screen]);
+    const auto &capture = GRAPHICS_CAPTURE_BUFFER[screen];
+    if (!capture.width || !capture.height) {
+        return false;
+    }
+
+    if (width != nullptr) {
+        *width = capture.width;
+    }
+    if (height != nullptr) {
+        *height = capture.height;
+    }
+    return true;
+}
+
+bool graphics_capture_receive_raw(int screen, std::shared_ptr<uint8_t[]> &out,
+        int divide, uint64_t *timestamp,
         int *width, int *height) {
+
+    out = nullptr;
 
     if (screen < 0 || screen >= static_cast<int>(GRAPHICS_CAPTURE_SCREEN_NO)) {
         return false;
@@ -1511,16 +1579,46 @@ bool graphics_capture_receive_jpeg(int screen, TooJpeg::WRITE_ONE_BYTE receiver,
         capture_height = height_new;
     }
 
-    // compress
-    auto success = TooJpeg::writeJpeg(
-            receiver, capture_data.get(),
-            capture_width, capture_height,
-            rgb, quality, downsample);
+    out = std::move(capture_data);
 
     // status
     if (timestamp) {
         *timestamp = capture_timestamp;
     }
+    if (width) {
+        *width = capture_width;
+    }
+    if (height) {
+        *height = capture_height;
+    }
+
+    return true;
+}
+
+bool graphics_capture_receive_jpeg(int screen, std::vector<uint8_t> &out,
+        int quality, int divide, uint64_t *timestamp,
+        int *width, int *height) {
+
+    out.clear();
+
+    std::shared_ptr<uint8_t[]> pixels;
+    int capture_width = 0;
+    int capture_height = 0;
+    if (!graphics_capture_receive_raw(
+            screen, pixels, divide, timestamp, &capture_width, &capture_height)) {
+        return false;
+    }
+
+    // compress
+    const bool success = jpeg_encoder::encode(
+            out, pixels.get(),
+            capture_width, capture_height, quality);
+
+    if (!success) {
+        out.clear();
+    }
+
+    // status
     if (width) {
         *width = capture_width;
     }

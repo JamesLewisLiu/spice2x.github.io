@@ -127,7 +127,30 @@ doesn't matter since the TCP protocol doesn't allow for out of order data,
 however this may change when/if support for UDP is being introduced. The only
 restriction is that the ID has to be a valid 64-bit unsigned integer.
 
+#### Capture
+- get_screens()
+  - returns the screen numbers the game has registered for capture
+- get_jpg(screen: uint, quality: uint, divide: uint)
+  - returns the timestamp, width, height and base64 encoded JPEG of one screen
+  - all parameters are optional and default to screen 0, quality 70, divide 1
+  - divide shrinks the image by that factor before encoding
+- get_streams()
+  - returns a dict describing the HTTP video stream, or no data at all when
+    `-apistream` is not enabled and there is nothing to describe
+  - `port` is the stream server port
+  - `formats` lists the wire formats this build serves, each with a `name`
+    (`h264` or `mjpeg`) and the `path` to request them on
+  - `screens` lists every capturable screen with its `width`, `height`, and
+    `busy`
+
 #### Card
+- get_cards()
+  - returns the current card ID and source for each active card reader
+  - each entry contains `index`, `card_id`, and `source`
+  - `source` is `file` or `override`
+  - file entries also contain `file_name`, without the full configured path
+  - `-card0` and `-card1` overrides do not contain `file_name`
+  - this function only works when an API password is configured
 - insert(index: uint, card_id: hex)
   - inserts a card which gets read by the emulated card readers for the game
   - index has to be either 0 (for P1) or 1 (for P2)
@@ -290,6 +313,47 @@ which also means that your hex edits are applicable directly.
   - enables or disables image resize state
 - image_resize_set_scene(scene: int)
   - sets the active scene for image resize state; set to 0 to disable resize
+
+## Video Stream
+
+Separate from the JSON API, spice can serve the mirrored screen as a video
+stream over plain HTTP. Enable it with `-apistream`. It listens on the API port
+plus two, in the same way the WebSocket server uses the API port plus one, so
+`-api 1337` puts the stream on 1339. This means `-api` has to be enabled too.
+
+Rather than working the port out, clients should ask the JSON API for it with
+`capture.get_streams()`, which also reports which of the formats below this
+build serves, the size of each screen and whether one is already taken.
+
+Two formats are served:
+
+    http://host:1339/stream.mjpg    JPEG frames, multipart/x-mixed-replace
+    http://host:1339/stream.h264    H.264 annex-b, no container
+
+All accept the same optional query parameters:
+
+- `screen` - which screen to mirror, 0-3. Defaults to the subscreen when the
+  game has one, otherwise the main screen.
+- `fps` - frames per second, 1-60. Default 30.
+- `q` - quality, 1-100. Default 70. This is the JPEG quality for `stream.mjpg`
+  and is mapped onto the H.264 rate factor for `stream.h264`, so the same number
+  does not mean the same thing for both.
+
+For example:
+
+    http://host:1339/stream.h264?screen=1&fps=30&q=70
+
+See the wiki for format tradeoffs, latency tuning, testing commands and client
+notes.
+
+The stream is view only. Touch and other input still go through the JSON API,
+so a companion app needs both. There is no authentication on the stream port -
+anyone who can reach it can watch the screen.
+
+WinXP builds have no video stream. Neither encoder is compiled in, so nothing
+listens on the stream port even with `-apistream`, `capture.get_streams()`
+returns no data, and the JSON API's JPEG screen capture is unavailable for the
+same reason.
 
 ## Native wrapper libraries
 Spicetools provides wrapper libraries in: Arduino, C++, Dart, and Python.
