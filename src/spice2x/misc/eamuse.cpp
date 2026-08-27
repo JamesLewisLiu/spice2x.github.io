@@ -20,6 +20,7 @@
 
 // state
 static constexpr double NOTIFICATION_THROTTLE_SECONDS = 3.0;
+static constexpr uint64_t COIN_INSERT_PULSE_MS = 100;
 static bool CARD_INSERT[2] = {false, false};
 static double CARD_INSERT_TIME[2] = {0, 0};
 static double CARD_INSERT_TIMEOUT = 2.0;
@@ -27,6 +28,7 @@ static char CARD_INSERT_UID[2][8] = {{0}, {0}};
 static char CARD_INSERT_UID_ENABLE[2] = {false, false};
 static std::atomic_int COIN_STOCK {0};
 static std::atomic_bool COIN_BLOCK {false};
+static std::atomic<uint64_t> COIN_INSERT_TIME_MS {UINT64_MAX};
 static uint16_t KEYPAD_STATE[] = {0, 0};
 static uint16_t KEYPAD_STATE_OVERRIDES[] = {0, 0};
 static uint16_t KEYPAD_STATE_OVERRIDES_BT5[] = {0, 0};
@@ -306,6 +308,15 @@ void eamuse_coin_set_block(bool block) {
     COIN_BLOCK.store(block, std::memory_order_relaxed);
 }
 
+bool eamuse_coin_get_insert_pulse() {
+    const auto insert_time = COIN_INSERT_TIME_MS.load(std::memory_order_relaxed);
+    if (insert_time == UINT64_MAX) {
+        return false;
+    }
+    const auto now = static_cast<uint64_t>(get_performance_milliseconds());
+    return now - insert_time < COIN_INSERT_PULSE_MS;
+}
+
 int eamuse_coin_get_stock() {
     return COIN_STOCK.load(std::memory_order_relaxed);
 }
@@ -332,6 +343,9 @@ int eamuse_coin_consume_stock() {
 }
 
 int eamuse_coin_add() {
+    COIN_INSERT_TIME_MS.store(
+            static_cast<uint64_t>(get_performance_milliseconds()),
+            std::memory_order_relaxed);
     return COIN_STOCK.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
@@ -340,6 +354,9 @@ void eamuse_coin_insert() {
         log_info("eamuse", "coin inserted while blocked");
     } else {
         log_info("eamuse", "coin insert");
+        COIN_INSERT_TIME_MS.store(
+                static_cast<uint64_t>(get_performance_milliseconds()),
+                std::memory_order_relaxed);
         COIN_STOCK.fetch_add(1, std::memory_order_relaxed);
     }
 }

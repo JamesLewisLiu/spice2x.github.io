@@ -53,6 +53,7 @@ bool eamuse_card_insert_consume(int active_count, int unit_id);
 
 bool eamuse_coin_get_block();
 void eamuse_coin_set_block(bool block);
+bool eamuse_coin_get_insert_pulse();
 
 int eamuse_coin_get_stock();
 void eamuse_coin_set_stock(int amount);
