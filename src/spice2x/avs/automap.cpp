@@ -400,6 +400,8 @@ namespace avs::automap {
             auto size = avs::core::property_query_size(prop);
             if (size < 0) {
                 log_warning("automap", "couldn't query property size");
+            } else if (size == 0) {
+                log_warning("automap", "skipping empty property dump");
             } else {
                 log_misc("automap", "writing property to file: {} bytes", size);
 
