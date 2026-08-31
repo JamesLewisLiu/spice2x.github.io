@@ -1,5 +1,6 @@
 #include "iopanel_dea.h"
 
+#include "cfg/api.h"
 #include "games/dea/io.h"
 #include "games/io.h"
 #include "misc/eamuse.h"
