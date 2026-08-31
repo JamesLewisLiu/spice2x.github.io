@@ -279,9 +279,11 @@ bool eamuse_card_insert_consume(int active_count, int unit_id) {
 
     // check for card insert
     auto keypad_buttons = games::get_buttons_keypads(eamuse_get_game());
-    auto offset = unit_id * games::KeypadButtons::Size;
+    const auto insert_button = avs::game::is_model("KDM")
+        ? games::KeypadButtons::InsertCard + index
+        : games::KeypadButtons::InsertCard + unit_id * games::KeypadButtons::Size;
     if ((CARD_INSERT[index] && fabs(get_performance_seconds() - CARD_INSERT_TIME[index]) < CARD_INSERT_TIMEOUT)
-        || GameAPI::Buttons::getState(RI_MGR, keypad_buttons->at(games::KeypadButtons::InsertCard + offset))) {
+        || GameAPI::Buttons::getState(RI_MGR, keypad_buttons->at(insert_button))) {
 
         log_info("eamuse", "[P{}] Card insert on reader (total active count: {})", unit_id+1, active_count);
         CARD_INSERT[index] = false;
@@ -518,6 +520,12 @@ uint16_t eamuse_get_keypad_state(size_t unit) {
     KEYPAD_STATE[unit] |= KEYPAD_STATE_OVERRIDES_BT5[unit];
     KEYPAD_STATE[unit] |= KEYPAD_STATE_OVERRIDES_READER[unit];
     KEYPAD_STATE[unit] |= KEYPAD_STATE_OVERRIDES_OVERLAY[unit];
+
+    // KDM has one shared keypad. Its second reader has a separate insert
+    // switch, which is handled directly by eamuse_card_insert_consume.
+    if (avs::game::is_model("KDM") && unit > 0) {
+        return KEYPAD_STATE[unit];
+    }
 
     // bt5api
     if (BT5API_ENABLED) {

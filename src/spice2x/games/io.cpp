@@ -403,6 +403,25 @@ namespace games {
         std::vector<std::string> names;
         std::vector<unsigned short> vkey_defaults;
 
+        // Dance Evolution has one shared keypad and separate insert switches
+        // for its two independent card readers.
+        if (game == "Dance Evolution") {
+            for (const auto *key : {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "Decimal"}) {
+                names.emplace_back("Keypad " + std::string(key));
+            }
+            vkey_defaults = {
+                VK_NUMPAD0, VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD4,
+                VK_NUMPAD5, VK_NUMPAD6, VK_NUMPAD7, VK_NUMPAD8, VK_NUMPAD9,
+                VK_SUBTRACT, VK_DECIMAL,
+            };
+            names.emplace_back("P1 Insert Card");
+            vkey_defaults.push_back(VK_ADD);
+            names.emplace_back("P2 Insert Card");
+            vkey_defaults.push_back(0xFF);
+
+            return GameAPI::Buttons::sortButtons(buttons, names, &vkey_defaults);
+        }
+
         // loop for 2 keypad units, only setting defaults for keypad 1
         for (size_t unit = 0; unit < 2; unit++) {
             std::string prefix = unit == 0 ? "P1 Keypad " : "P2 Keypad ";

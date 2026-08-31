@@ -618,7 +618,10 @@ namespace overlay::windows {
 
                     auto keypad_buttons = games::get_buttons_keypads(this->games_selected_name);
                     auto keypad_count = eamuse_get_game_keypads_name();
-                    if (keypad_count == 1) {
+                    if (this->games_selected_name == "Dance Evolution") {
+                        this->build_buttons("Keypad", keypad_buttons,
+                                            0, games::KeypadButtons::Size);
+                    } else if (keypad_count == 1) {
                         this->build_buttons("Keypad", keypad_buttons,
                                             0, games::KeypadButtons::Size - 1);
                     } else if (keypad_count >= 2) {
