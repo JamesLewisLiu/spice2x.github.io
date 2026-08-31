@@ -46,7 +46,7 @@ namespace overlay::windows {
     }
 
     void DEAIOPanel::draw_player(int player) {
-        const float diameter = ImGui::GetFrameHeightWithSpacing() + ImGui::GetFrameHeight();
+        const float diameter = ImGui::GetFrameHeight() * 3.5f;
         const ImVec2 size(diameter, diameter);
 
         draw_button("<", size, left[player], lr_light[player], false);
@@ -71,19 +71,26 @@ namespace overlay::windows {
         }
 
         const bool lit = light && GameAPI::Lights::readLight(RI_MGR, *light) > 0.5f;
-        const ImU32 color = ImGui::GetColorU32(lit ? ImGuiCol_ButtonActive : ImGuiCol_Button);
+        ImGuiCol color = ImGuiCol_Button;
+        if (ImGui::IsItemActive()) {
+            color = ImGuiCol_ButtonActive;
+        } else if (ImGui::IsItemHovered()) {
+            color = ImGuiCol_ButtonHovered;
+        } else if (lit) {
+            color = ImGuiCol_ButtonActive;
+        }
         const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
         const ImVec2 center(pos.x + size.x * 0.5f, pos.y + size.y * 0.5f);
-        const float radius = size.x * 0.42f;
+        const float radius = size.x * 0.46f;
         auto *draw_list = ImGui::GetWindowDrawList();
 
         if (round) {
-            draw_list->AddCircleFilled(center, radius, color);
+            draw_list->AddCircleFilled(center, radius, ImGui::GetColorU32(color));
             draw_list->AddCircle(center, radius, border);
         } else {
             draw_list->AddQuadFilled(
                 ImVec2(center.x, center.y - radius), ImVec2(center.x + radius, center.y),
-                ImVec2(center.x, center.y + radius), ImVec2(center.x - radius, center.y), color);
+                ImVec2(center.x, center.y + radius), ImVec2(center.x - radius, center.y), ImGui::GetColorU32(color));
             draw_list->AddQuad(
                 ImVec2(center.x, center.y - radius), ImVec2(center.x + radius, center.y),
                 ImVec2(center.x, center.y + radius), ImVec2(center.x - radius, center.y), border);
