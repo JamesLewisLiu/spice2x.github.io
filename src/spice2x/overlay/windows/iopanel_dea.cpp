@@ -3,6 +3,7 @@
 #include "cfg/api.h"
 #include "games/dea/io.h"
 #include "games/io.h"
+#include "launcher/launcher.h"
 #include "misc/eamuse.h"
 
 namespace overlay::windows {
