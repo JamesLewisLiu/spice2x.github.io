@@ -45,6 +45,7 @@
 #include "windows/gfdm_sub.h"
 #include "windows/drs_dancefloor.h"
 #include "windows/iopanel.h"
+#include "windows/iopanel_dea.h"
 #include "windows/iopanel_ddr.h"
 #include "windows/iopanel_gfdm.h"
 #include "windows/iopanel_iidx.h"
@@ -465,6 +466,8 @@ void overlay::SpiceOverlay::init() {
             window_iopanel = new overlay::windows::IIDXIOPanel(this);
         } else if (avs::game::is_model("MDX")) {
             window_iopanel = new overlay::windows::DDRIOPanel(this);
+        } else if (avs::game::is_model("KDM")) {
+            window_iopanel = new overlay::windows::DEAIOPanel(this);
         } else if (avs::game::is_model({"J32", "J33", "K32", "K33", "L32", "L33", "M32"}) &&
             !games::gitadora::is_arena_model()) {
             window_iopanel = new overlay::windows::GitadoraIOPanel(this);

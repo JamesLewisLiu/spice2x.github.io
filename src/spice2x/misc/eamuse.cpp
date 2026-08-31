@@ -251,7 +251,7 @@ bool eamuse_card_insert_consume(int active_count, int unit_id) {
     // bt5api
     if (BT5API_ENABLED) {
         // some bt5api want to be polled in order.
-        if (eamuse_get_game_keypads() > 1) {
+        if (eamuse_get_game_readers() > 1) {
             bt5api_poll_reader_card(1);
             bt5api_poll_reader_card(0);
         }
@@ -630,6 +630,17 @@ int eamuse_get_game_keypads() {
     }
 
     return 1;
+}
+
+int eamuse_get_game_readers() {
+    // Dance Evolution has two independent card readers, but only one shared
+    // keypad. Keep this separate from the keypad count so P2 cards remain
+    // available without exposing a keypad that does not exist on the cabinet.
+    if (avs::game::is_model("KDM")) {
+        return 2;
+    }
+
+    return eamuse_get_game_keypads();
 }
 
 int eamuse_get_game_keypads_name() {

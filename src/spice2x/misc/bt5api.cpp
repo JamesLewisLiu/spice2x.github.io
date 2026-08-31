@@ -223,7 +223,7 @@ void bt5api_init() {
     eam_io_init(&bt5api_thread_create, &bt5api_thread_join, &bt5api_thread_destroy);
 
     // bt5api workaround for games with 2 card readers (NFCeAmuse cares about this)
-    if (eamuse_get_game_keypads() > 1) {
+    if (eamuse_get_game_readers() > 1) {
         bt5api_poll_reader_card(1);
         bt5api_poll_reader_card(0);
     }
@@ -242,7 +242,7 @@ void bt5api_hook(HINSTANCE module) {
 void bt5api_poll_reader_card(uint8_t unit_no) {
 
     // check if initialized or out of bounds
-    if (!EAMIO_DLL || unit_no >= eamuse_get_game_keypads()) {
+    if (!EAMIO_DLL || unit_no >= eamuse_get_game_readers()) {
         return;
     }
 

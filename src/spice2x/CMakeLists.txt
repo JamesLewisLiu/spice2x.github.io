@@ -669,6 +669,7 @@ set(SOURCE_FILES ${SOURCE_FILES}
         overlay/windows/iidx_seg.cpp
         overlay/windows/iidx_sub.cpp
         overlay/windows/iopanel.cpp
+        overlay/windows/iopanel_dea.cpp
         overlay/windows/iopanel_ddr.cpp
         overlay/windows/iopanel_gfdm.cpp
         overlay/windows/iopanel_iidx.cpp

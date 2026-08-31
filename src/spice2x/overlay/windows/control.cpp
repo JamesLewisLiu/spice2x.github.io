@@ -481,7 +481,7 @@ namespace overlay::windows {
                         eamuse_card_insert(0, card_data);
                     }
                 }
-                if (eamuse_get_game_keypads() > 1) {
+                if (eamuse_get_game_readers() > 1) {
                     ImGui::SameLine();
                     if (ImGui::Button("Insert P2")) {
                         uint8_t card_data[8];

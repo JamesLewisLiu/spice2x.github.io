@@ -51,7 +51,7 @@ namespace overlay::windows {
                 card_cmd_overrides[0].emplace(card0);
                 this->loaded_card[0] = card0;
             }
-            if (eamuse_get_game_keypads() > 1 && !CARD_OVERRIDES[1].empty()) {
+            if (eamuse_get_game_readers() > 1 && !CARD_OVERRIDES[1].empty()) {
                 const CardEntry card1 = {
                     .name = "P2 Default (-card1)",
                     .id = CARD_OVERRIDES[1],
@@ -74,17 +74,17 @@ namespace overlay::windows {
         ImGui::HelpMarker(
             "Click to insert card now, or press Insert Card key. Auto Card Insert will also use these cards.\n\n"
             "If no override is set, pressing Insert Card will read from card0.txt / card1.txt.");
-        if (ImGui::BeginTable("CardSetTable", eamuse_get_game_keypads() > 1 ? 2 : 1, ImGuiTableFlags_SizingFixedFit)) {
+        if (ImGui::BeginTable("CardSetTable", eamuse_get_game_readers() > 1 ? 2 : 1, ImGuiTableFlags_SizingFixedFit)) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::TextUnformatted("Player 1");
-            if (eamuse_get_game_keypads() > 1) {
+            if (eamuse_get_game_readers() > 1) {
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Player 2");
             }
             ImGui::TableNextRow();
             for (size_t i = 0; i < 2; i++) {
-                if (eamuse_get_game_keypads() > (int)i) {
+                if (eamuse_get_game_readers() > (int)i) {
                     ImGui::TableNextColumn();
                     if (build_card(i) && this->loaded_card[i].has_value()) {
                         insert_card_over_api(i, this->loaded_card[i].value());
@@ -320,7 +320,7 @@ namespace overlay::windows {
 
         // set card as p1/p2
         for (size_t i = 0; i < 2; i++) {
-            if (eamuse_get_game_keypads() > (int)i) {
+            if (eamuse_get_game_readers() > (int)i) {
                 if (i != 0) {
                     ImGui::SameLine();
                 }

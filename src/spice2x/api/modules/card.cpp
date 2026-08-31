@@ -48,7 +48,7 @@ namespace api::modules {
     void Card::get_cards(Request &req, Response &res) {
         auto &alloc = res.doc()->GetAllocator();
 
-        for (int index = 0; index < eamuse_get_game_keypads(); index++) {
+        for (int index = 0; index < eamuse_get_game_readers(); index++) {
             std::string card_id;
             std::string filename;
             const auto card_override = eamuse_get_card_override(index);
