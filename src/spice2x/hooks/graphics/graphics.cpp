@@ -526,6 +526,19 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                     SPICETOUCH_TOUCH_WIDTH, SPICETOUCH_TOUCH_HEIGHT,
                     SWP_NOZORDER | SWP_NOREDRAW | SWP_NOREPOSITION | SWP_NOACTIVATE);
             }
+
+            // Reflec Beat resets its D3D9 device for every WM_SIZE.  Once
+            // windowed mode has replaced the exclusive presentation path,
+            // that reset can fail and the game subsequently dereferences a
+            // texture which was never created.  The RB touch hook already
+            // replaces the game window procedure with DefWindowProc to avoid
+            // this, but it is installed only after the device is opened.
+            // Consume WM_SIZE here as well so the original game procedure
+            // cannot issue that unsafe Reset during startup.
+            if (uMsg == WM_SIZE && GRAPHICS_WINDOWED &&
+                    avs::game::is_model({"KBR", "LBR", "MBR"})) {
+                return 0;
+            }
             break;
         case WM_ACTIVATEAPP:
             if (wParam) {
