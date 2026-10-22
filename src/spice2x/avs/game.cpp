@@ -1,4 +1,5 @@
 #include "game.h"
+#include "games/gitadora/legacy.h"
 
 #include "launcher/launcher.h"
 #include "util/fileutils.h"
@@ -69,6 +70,10 @@ namespace avs {
         }
 
         void load_dll() {
+            if (games::gitadora::legacy::enabled()) {
+                games::gitadora::legacy::load();
+                return;
+            }
             log_info("avs-game", "loading DLL '{}'", DLL_NAME);
 
             // load game instance
@@ -126,6 +131,9 @@ namespace avs {
         }
 
         bool entry_init(char *sid_code, void *app_param) {
+            if (games::gitadora::legacy::enabled()) {
+                return games::gitadora::legacy::entry_init(sid_code, app_param);
+            }
             auto current_entry_init = (ENTRY_INIT_T) libutils::get_proc(DLL_INSTANCE, ENTRY_INIT_NAME);
 
             if (dll_entry_init != current_entry_init) {
@@ -138,6 +146,10 @@ namespace avs {
         }
 
         void entry_main() {
+            if (games::gitadora::legacy::enabled()) {
+                games::gitadora::legacy::entry_main();
+                return;
+            }
             auto current_entry_main = (ENTRY_MAIN_T) libutils::get_proc(DLL_INSTANCE, ENTRY_MAIN_NAME);
 
             if (dll_entry_main != current_entry_main) {

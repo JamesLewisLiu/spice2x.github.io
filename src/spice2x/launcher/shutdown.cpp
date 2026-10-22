@@ -1,10 +1,12 @@
 // included early to avoid warning
 #include <winsock2.h>
+#include <atomic>
 
 #include "shutdown.h"
 
 #include "api/controller.h"
 #include "easrv/easrv.h"
+#include "games/gitadora/legacy.h"
 #include "rawinput/rawinput.h"
 #include "hooks/audio/audio.h"
 #include "hooks/graphics/graphics.h"
@@ -18,6 +20,35 @@
 #include "sdk/sdk.h"
 
 namespace launcher {
+
+    static void restart_spawn();
+    static std::atomic_flag legacy_process_stopping = ATOMIC_FLAG_INIT;
+    static std::atomic<bool> legacy_process_restart{false};
+
+    static bool stop_legacy_process(bool restart) {
+        if (!games::gitadora::legacy::has_process_lifetime_resources()) {
+            return false;
+        }
+        if (restart) {
+            legacy_process_restart.store(true, std::memory_order_release);
+        }
+        if (legacy_process_stopping.test_and_set(std::memory_order_acq_rel)) {
+            return true;
+        }
+        // The native loop may be waiting inside a game/renderer call. As in
+        // the original WM_CLOSE -> exit path, do not require another frame to
+        // return before exiting. Retain native objects while Spice performs
+        // the same subsystem cleanup used by its normal Exit Game path.
+        log_info("gdxg-legacy", "native process exit: retaining AVS until process exit");
+        stop_subsystems();
+        if (legacy_process_restart.load(std::memory_order_acquire)) {
+            restart_spawn();
+        }
+        // Match Spice's normal process exit after subsystem cleanup. Native
+        // DLL destructors cannot safely require a complete game/AVS teardown.
+        kill(EXIT_SUCCESS);
+        return true;
+    }
 
     void stop_subsystems() {
         // note that it is possible for stop_subsystems to be called multiple times
@@ -67,6 +98,12 @@ namespace launcher {
     }
 
     void shutdown(UINT exit_code) {
+        if (exit_code == EXIT_SUCCESS && stop_legacy_process(false)) {
+            return;
+        }
+        if (exit_code == EXIT_SUCCESS && games::gitadora::legacy::request_exit(false)) {
+            return;
+        }
 
         // force exit after 1s
         std::thread force_thread([exit_code] {
@@ -94,6 +131,31 @@ namespace launcher {
             already_done = true;
         }
 
+        if (games::gitadora::legacy::enabled()) {
+            // The CRT system("START ...") path can wait for the replacement
+            // while retaining the native process. Spawn directly, preserving
+            // Windows quoting, Unicode arguments, environment and working dir.
+            std::wstring application(32768, L'\0');
+            auto length = GetModuleFileNameW(nullptr, application.data(), application.size());
+            if (length == 0 || length >= application.size()) {
+                log_warning("launcher", "unable to resolve native restart executable: {}", GetLastError());
+                return;
+            }
+            application.resize(length);
+            std::wstring command_line = GetCommandLineW();
+            STARTUPINFOW startup{};
+            startup.cb = sizeof(startup);
+            PROCESS_INFORMATION process{};
+            if (CreateProcessW(application.c_str(), command_line.data(), nullptr, nullptr,
+                    FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+            } else {
+                log_warning("launcher", "unable to restart native process: {}", GetLastError());
+            }
+            return;
+        }
+
         // start the process using the same args
         if (LAUNCHER_ARGC > 0) {
 
@@ -107,7 +169,25 @@ namespace launcher {
         }
     }
 
+    void finish_legacy_shutdown() {
+        if (games::gitadora::legacy::restart_requested()) {
+            restart_spawn();
+        }
+        if (games::gitadora::legacy::has_process_lifetime_resources()) {
+            // Spice has already detached its devices, joined its workers and
+            // flushed/stopped logging. Retained native resources are reclaimed
+            // together by the OS, as on Spice's normal Exit Game path.
+            kill(EXIT_SUCCESS);
+        }
+    }
+
     void restart() {
+        if (stop_legacy_process(true)) {
+            return;
+        }
+        if (games::gitadora::legacy::request_exit(true)) {
+            return;
+        }
 
         // force restart after 1s
         std::thread force_thread([] {

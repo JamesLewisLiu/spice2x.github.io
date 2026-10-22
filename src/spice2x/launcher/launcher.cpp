@@ -37,6 +37,7 @@
 #include "games/dea/dea.h"
 #include "games/drs/drs.h"
 #include "games/gitadora/gitadora.h"
+#include "games/gitadora/legacy.h"
 #include "games/hpm/hpm.h"
 #include "games/iidx/iidx.h"
 #include "games/iidx/poke.h"
@@ -290,10 +291,17 @@ int main_implementation(int argc, char *argv[]) {
     }
 
     // detect model used to load option overrides
-    auto options_version = launcher::detect_gameversion(
-            LAUNCHER_OPTIONS->at(launcher::Options::PathToEa3Config).value,
-            LAUNCHER_OPTIONS->at(launcher::Options::PathToBootstrap).value
-    );
+    const auto &legacy_identity = LAUNCHER_OPTIONS->at(launcher::Options::GitaDoraLegacyIdentity);
+    launcher::GameVersion options_version;
+    if (legacy_identity.is_active()) {
+        games::gitadora::legacy::configure(legacy_identity.value_text(),
+                LAUNCHER_OPTIONS->at(launcher::Options::PathToBootstrap).value);
+        eamuse_autodetect_game();
+    } else {
+        options_version = launcher::detect_gameversion(
+                LAUNCHER_OPTIONS->at(launcher::Options::PathToEa3Config).value,
+                LAUNCHER_OPTIONS->at(launcher::Options::PathToBootstrap).value);
+    }
     if (!options_version.model.empty() && options_version.model.size() < 4) {
         if (options_version.dest.size() == 1) {
             avs::game::DEST[0] = options_version.dest[0];
@@ -1931,6 +1939,18 @@ int main_implementation(int argc, char *argv[]) {
         }
     }
 
+    if (games::gitadora::legacy::enabled()) {
+        if (options[launcher::Options::GameExecutable].is_active()) {
+            log_fatal("gdxg-legacy", "-gdxg cannot be combined with -exec");
+        }
+        avs::game::DLL_NAME = "game.dll";
+        attach_io = true;
+        attach_device = true;
+        attach_extdev = true;
+        attach_ami2000 = true;
+        attach_gitadora = true;
+    }
+
     // auto detect game if not specified
     if (avs::game::DLL_NAME.empty()) {
         bool module_path_tried = false;
@@ -2400,7 +2420,11 @@ int main_implementation(int argc, char *argv[]) {
     SetErrorMode(0);
 
     // set the AVS heap size to a default value varying by game
-    avs::core::set_default_heap_size(avs::game::DLL_NAME);
+    if (games::gitadora::legacy::enabled()) {
+        avs::core::HEAP_SIZE = 0x2000000;
+    } else {
+        avs::core::set_default_heap_size(avs::game::DLL_NAME);
+    }
 
     // load the games
     std::vector<games::Game *> games;
@@ -2670,7 +2694,9 @@ int main_implementation(int argc, char *argv[]) {
 
     // load DLLs
     avs::core::load_dll();
-    avs::ea3::load_dll();
+    if (!games::gitadora::legacy::is_cn()) {
+        avs::ea3::load_dll();
+    }
 
     // NIC spoof / matching tunnel first so divert owns overlapping ws2_32
     // MinHook slots (bind/sendto/recvfrom/...). ICMP then installs only the
@@ -2701,11 +2727,18 @@ int main_implementation(int argc, char *argv[]) {
     // copy defaults to nvram
     avs::core::copy_defaults();
 
+    // Resolve XG1's native date before any date-filtered patches are loaded.
+    games::gitadora::legacy::resolve_datecode();
+
     // prepare patches (registers the DLL-load notification before the game DLL loads)
     patcher::init();
 
     // load game
     avs::game::load_dll();
+    if (games::gitadora::legacy::enabled()) {
+        avs::core::attach_legacy_storage_hooks();
+        avs::ea3::attach_legacy_hooks();
+    }
 
     // attach games
     for (auto game : games) {
@@ -2837,7 +2870,11 @@ int main_implementation(int argc, char *argv[]) {
     patcher::apply_patches_on_start();
 
     // load AVS-EA3
-    avs::ea3::boot(easrv_port, easrv_maint, easrv_smart);
+    if (games::gitadora::legacy::enabled()) {
+        avs::ea3::prepare_legacy(easrv_port, easrv_maint, easrv_smart);
+    } else {
+        avs::ea3::boot(easrv_port, easrv_maint, easrv_smart);
+    }
 
     // eamuse init
     eamuse_autodetect_game();
@@ -3018,10 +3055,20 @@ int main_implementation(int argc, char *argv[]) {
     }
 
     // AVS EA3 shutdown
-    avs::ea3::shutdown();
+    if (games::gitadora::legacy::enabled()) {
+        games::gitadora::legacy::shutdown();
+    } else {
+        avs::ea3::shutdown();
+    }
 
-    // AVS cleanup
-    avs::core::shutdown();
+    // XG1's native modules have no complete in-process teardown contract. Their
+    // allocations and workers must retain both AVS and its backing heaps until
+    // finish_legacy_shutdown ends the process, as the original EXEs do.
+    if (games::gitadora::legacy::has_process_lifetime_resources()) {
+        log_info("gdxg-legacy", "retaining AVS until process exit");
+    } else {
+        avs::core::shutdown();
+    }
 
     // dispose crypt
     crypt::dispose();
@@ -3039,6 +3086,7 @@ int main_implementation(int argc, char *argv[]) {
     // shutdown
     log_warning("launcher", "end");
     launcher::stop_subsystems();
+    launcher::finish_legacy_shutdown();
 
     return 0;
 }

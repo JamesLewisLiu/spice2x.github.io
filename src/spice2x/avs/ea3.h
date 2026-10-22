@@ -41,6 +41,8 @@ namespace avs {
         void load_dll();
         void boot(unsigned short easrv_port, bool easrv_maint, bool easrv_smart);
         void shutdown();
+        void prepare_legacy(unsigned short easrv_port, bool easrv_maint, bool easrv_smart);
+        void attach_legacy_hooks();
     }
 
     /*

@@ -1,5 +1,6 @@
 #include "core.h"
 
+#include <algorithm>
 #include <mutex>
 #include <optional>
 #include <vector>
@@ -8,6 +9,7 @@
 
 #include "external/robin_hood.h"
 #include "games/popn/popn.h"
+#include "games/gitadora/legacy.h"
 #include "launcher/logger.h"
 #include "launcher/signal.h"
 #include "util/deferlog.h"
@@ -1905,14 +1907,158 @@ namespace avs {
             } while ((vfs_node = property_node_traversal(vfs_node, TRAVERSE_NEXT_SEARCH_RESULT)));
         }
 
+
+        static std::string legacy_storage_paths[6];
+        static decltype(&CreateDirectoryA) legacy_create_directory;
+        static AVS_FS_MOUNT_T legacy_fs_mount;
+
+        static void prepare_legacy_storage() {
+            static constexpr const char *folders[] = {
+                "CONF", "CONF/NVRAM", "CONF/RAW", "TMP", "CACHE", "CACHE/PROXY"
+            };
+            auto base = std::filesystem::current_path();
+            for (size_t i = 0; i < std::size(folders); ++i) {
+                auto path = base / folders[i];
+                std::error_code error;
+                std::filesystem::create_directories(path, error);
+                if (error || !std::filesystem::is_directory(path)) {
+                    log_fatal("avs-core", "cannot create legacy storage directory {}: {}", path.string(), error.message());
+                }
+                legacy_storage_paths[i] = path.string();
+            }
+        }
+
+        static const char *legacy_storage_redirect(const char *path) {
+            if (!path) {
+                return path;
+            }
+            std::string normalized(path);
+            std::replace(normalized.begin(), normalized.end(), '\\', '/');
+            if (!normalized.empty() && normalized.back() == '/') {
+                normalized.pop_back();
+            }
+            const char *relative = normalized.c_str();
+            bool conf = false;
+            bool cache = false;
+            if (_strnicmp(relative, "E:/", 3) == 0) {
+                relative += 3;
+                conf = true;
+            } else if (_strnicmp(relative, "F:/", 3) == 0) {
+                relative += 3;
+                cache = true;
+            } else if (strncmp(relative, "./", 2) == 0) {
+                relative += 2;
+                conf = cache = true;
+            } else {
+                return path;
+            }
+            static constexpr const char *folders[] = {
+                "CONF", "CONF/NVRAM", "CONF/RAW", "TMP", "CACHE", "CACHE/PROXY"
+            };
+            for (size_t i = 0; i < std::size(folders); ++i) {
+                if ((i < 3 ? conf : cache) && _stricmp(relative, folders[i]) == 0) {
+                    return legacy_storage_paths[i].c_str();
+                }
+            }
+            return path;
+        }
+
+        static BOOL WINAPI legacy_CreateDirectoryA(LPCSTR path, LPSECURITY_ATTRIBUTES attributes) {
+            // Preserve the original result, attributes and GetLastError.
+            return legacy_create_directory(legacy_storage_redirect(path), attributes);
+        }
+
+        static int legacy_mount(const char *mountpoint, const char *device, const char *fstype, void *data) {
+            if (mountpoint && (strcmp(mountpoint, "/tmp/") == 0 || strcmp(mountpoint, "/tmp") == 0)) {
+                device = legacy_storage_paths[3].c_str();
+            } else if (mountpoint && (strcmp(mountpoint, "/proxy/") == 0 || strcmp(mountpoint, "/proxy") == 0)) {
+                device = legacy_storage_paths[5].c_str();
+            }
+            return legacy_fs_mount(mountpoint, device, fstype, data);
+        }
+
+        void attach_legacy_storage_hooks() {
+            if (!games::gitadora::legacy::enabled()) {
+                return;
+            }
+            static bool attached = false;
+            if (attached) {
+                return;
+            }
+            auto boot = libutils::try_module("boot.dll");
+            if (!boot) {
+                log_fatal("avs-core", "legacy boot.dll must be loaded before storage hooks");
+            }
+            legacy_create_directory = detour::iat_try("CreateDirectoryA", legacy_CreateDirectoryA, boot, "kernel32.dll");
+            legacy_fs_mount = detour::iat_try("avs_fs_mount", legacy_mount, boot, DLL_NAME.c_str());
+            if (!legacy_create_directory || !legacy_fs_mount) {
+                log_fatal("avs-core", "unsupported legacy boot.dll imports (storage hooks incomplete)");
+            }
+            attached = true;
+        }
+
+        static property_ptr legacy_config() {
+            prepare_legacy_storage();
+            property_ptr config;
+            if (CFG_PATH.empty() && fileutils::file_exists("prop/avs-config.xml")) {
+                CFG_PATH = "prop/avs-config.xml";
+            }
+            if (!CFG_PATH.empty()) {
+                log_info("avs-core", "booting legacy game (using {})", CFG_PATH);
+                config = config_read(CFG_PATH);
+                if (property_search(config, nullptr, "/config/fs/mounttable")) {
+                    log_fatal("avs-core", "legacy startup does not support fs/mounttable; use scalar root/nvram/raw devices");
+                }
+            } else {
+                // boot_avs() defaults, reconstructed from XG1's seven-argument AVS startup.
+                // Keep the original root at the parent containing data; saves stay in this launcher directory.
+                log_info("avs-core", "booting legacy game (native XG1 AVS defaults)");
+                // Build the property as boot_avs does. The shared string reader assumes one complete
+                // read, but these AVS versions parse incrementally. Retain a buffer for config_destroy.
+                constexpr uint32_t buffer_size = 0x10000;
+                auto buffer = malloc(buffer_size);
+                if (!buffer) {
+                    log_fatal("avs-core", "cannot allocate legacy AVS configuration");
+                }
+                config = property_create(7, buffer, buffer_size);
+                if (!config) {
+                    free(buffer);
+                    log_fatal("avs-core", "cannot create legacy AVS configuration");
+                }
+                auto number = [&](node_type type, const char *path, unsigned value) {
+                    if (!property_node_create(config, nullptr, type, path, value)) {
+                        log_fatal("avs-core", "cannot create legacy AVS config node {}", path);
+                    }
+                };
+                number(NODE_TYPE_u32, "/config/log/level", 4);
+                number(NODE_TYPE_u32, "/config/thread/priority", 2);
+                number(NODE_TYPE_u16, "/config/thread/nr_semaphore", 32);
+                number(NODE_TYPE_u16, "/config/thread/nr_thread", 64);
+                number(NODE_TYPE_u16, "/config/thread/nr_mutex", 128);
+                number(NODE_TYPE_u16, "/config/net/nr_protocol", 8);
+                number(NODE_TYPE_u16, "/config/net/nr_socket", 8);
+                number(NODE_TYPE_u8, "/config/net/enable_raw", 1);
+                if (!property_node_create(config, nullptr, NODE_TYPE_str, "/config/fs/root/device", "../")) {
+                    log_fatal("avs-core", "cannot create legacy AVS root device");
+                }
+            }
+            // Also contain explicitly configured save devices; never inherit the original E:/CONF.
+            property_search_remove_safe(config, nullptr, "/config/fs/nvram/device");
+            property_search_remove_safe(config, nullptr, "/config/fs/raw/device");
+            property_node_create(config, nullptr, NODE_TYPE_str, "/config/fs/nvram/device", legacy_storage_paths[1].c_str());
+            property_node_create(config, nullptr, NODE_TYPE_str, "/config/fs/raw/device", legacy_storage_paths[2].c_str());
+            return config;
+        }
+
         void boot() {
-            // default config path
-            CFG_PATH = !CFG_PATH.empty() ? CFG_PATH : "prop/avs-config.xml";
-
-            log_info("avs-core", "booting (using {})", CFG_PATH);
-
-            // read configuration
-            auto config = config_read(CFG_PATH);
+            property_ptr config;
+            if (games::gitadora::legacy::enabled()) {
+                config = legacy_config();
+            } else {
+                CFG_PATH = !CFG_PATH.empty() ? CFG_PATH : "prop/avs-config.xml";
+                log_info("avs-core", "booting (using {})", CFG_PATH);
+                config = config_read(CFG_PATH);
+            }
             auto config_node = property_search_safe(config, nullptr, "/config");
 
             // create nvram and raw directories if possible for non-mounttable configurations
@@ -1949,7 +2095,8 @@ namespace avs {
                     } else if (LOG_LEVEL_CUSTOM == "misc") {
                         log_level = 4;
                     } else if (LOG_LEVEL_CUSTOM == "all") {
-                        log_level = 5;
+                        // XG1's legacy logger asserts for values >= 5; misc is its maximum.
+                        log_level = games::gitadora::legacy::enabled() ? 4 : 5;
                     }
 
                     property_node_create(config, config_node,
@@ -2089,11 +2236,13 @@ namespace avs {
                     if (!AVS_HEAP1) {
                         log_warning("avs-core", "could not allocate heap 1");
                     }
-                    AVS_HEAP2 = malloc(HEAP_SIZE);
+                    const size_t secondary_heap_size = games::gitadora::legacy::enabled()
+                            ? 0x800000 : HEAP_SIZE;
+                    AVS_HEAP2 = malloc(secondary_heap_size);
                     if (!AVS_HEAP2) {
                         log_warning("avs-core", "could not allocate heap 2");
                     }
-                    avs215_boot(config_node, AVS_HEAP1, HEAP_SIZE, AVS_HEAP2, HEAP_SIZE,
+                    avs215_boot(config_node, AVS_HEAP1, HEAP_SIZE, AVS_HEAP2, secondary_heap_size,
                             (void *) &output_callback_old, LOG_FILE);
                     break;
                 }

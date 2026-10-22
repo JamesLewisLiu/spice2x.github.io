@@ -17,6 +17,7 @@
 #include "cfg/screen_resize.h"
 #include "games/ddr/ddr.h"
 #include "games/gitadora/gitadora.h"
+#include "games/gitadora/legacy.h"
 #include "games/iidx/iidx.h"
 #include "games/io.h"
 #include "games/sdvx/sdvx.h"
@@ -396,6 +397,14 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 
     // terminate
     if (uMsg == WM_CLOSE) {
+        if (games::gitadora::legacy::enabled()
+            && !games::gitadora::legacy::has_process_lifetime_resources()) {
+            // Before native boot, the host can still release its own renderer
+            // and allow the launcher's normal AVS shutdown. After boot, use the
+            // common Exit Game path without waiting for a native frame to end.
+            games::gitadora::legacy::request_exit(false);
+            return 0;
+        }
         log_info("graphics", "detected WM_CLOSE, terminating...");
         static std::once_flag shutdown_requested;
         std::call_once(shutdown_requested, [] {

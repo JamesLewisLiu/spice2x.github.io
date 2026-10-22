@@ -1535,6 +1535,17 @@ static const std::vector<OptionDefinition> OPTION_DEFINITIONS = std::invoke([]()
         .game_name = "Card Connect",
         .category = "Advanced Game Options",
     };
+    c[launcher::Options::GitaDoraLegacyIdentity] = {
+        .title = "XG1 / XG1CN Configuration",
+        .name = "gdxg",
+        .desc = "Use the native 32-bit XG1 host with a standard ea3-config.xml (<ea3><soft>) or an older ea3-ident XML. Destination J/C selects Japan/China; J33/J32 selects GF/DM. Missing datecodes are read from the original libsystem.dll. Must be passed via the command line.",
+        .type = OptionType::Text,
+        .game_name = "GitaDora",
+        .category = "Advanced Game Options",
+        .disabled = true,
+        .picker = OptionPickerType::FilePath,
+        .file_extension = "XML",
+    };
     c[launcher::Options::PathToModules] = {
         .title = "Modules Folder Override",
         .name = "modules",
@@ -3717,7 +3728,7 @@ std::string launcher::detect_bootstrap_release_code(const std::string& bootstrap
     if (node_root) {
         auto node_release_code = node_root->FirstChildElement("release_code");
         if (node_release_code) {
-            return node_release_code->GetText();
+            return node_release_code->GetText() ? node_release_code->GetText() : "";
         }
     }
 
@@ -3771,7 +3782,7 @@ static launcher::GameVersion detect_gameversion_ident(const std::string& bootstr
             }
             auto node_ext = node_soft->FirstChildElement("ext");
             if (node_ext) {
-                version.ext = node_ext->GetText();
+                version.ext = node_ext->GetText() ? node_ext->GetText() : "";
                 auto bootstrap_ext = launcher::detect_bootstrap_release_code(bootstrap_user);
                 if (version.ext.size() != 10 && bootstrap_ext.size() == 10) {
                     version.ext = bootstrap_ext;
@@ -3892,7 +3903,7 @@ launcher::GameVersion launcher::detect_gameversion(const std::string &ea3_user, 
             }
             auto node_ext = node_soft->FirstChildElement("ext");
             if (node_ext) {
-                version.ext = node_ext->GetText();
+                version.ext = node_ext->GetText() ? node_ext->GetText() : "";
                 auto bootstrap_ext = launcher::detect_bootstrap_release_code(bootstrap_user);
                 if (version.ext.size() != 10 && bootstrap_ext.size() == 10) {
                     version.ext = bootstrap_ext;

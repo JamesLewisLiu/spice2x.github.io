@@ -341,6 +341,7 @@ namespace launcher {
             OBSWebSocketDebug,
             ScreenshotIncludeOverlay,
             ScreenshotSubscreens,
+            GitaDoraLegacyIdentity,
 
             _Count,
         };

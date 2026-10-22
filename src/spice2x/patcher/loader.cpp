@@ -10,6 +10,7 @@
 #include "avs/game.h"
 #include "build/resource.h"
 #include "cfg/configurator.h"
+#include "games/gitadora/legacy.h"
 #include "external/fmt/include/fmt/chrono.h"
 #include "external/rapidjson/document.h"
 #include "external/rapidjson/error/en.h"
@@ -29,6 +30,11 @@ using namespace rapidjson;
 namespace patcher {
 
     std::vector<std::string> getExtraDlls(const std::string& firstDll) {
+        // XG1 uses Spice's native host instead of gdxg.dll. Keep the same
+        // companion patch targets without changing other games using game.dll.
+        if (firstDll == "game.dll" && games::gitadora::legacy::enabled()) {
+            return {"libshare-pj.dll", "boot.dll"};
+        }
         if (!EXTRA_DLLS.contains(firstDll)) {
             return {};
         }

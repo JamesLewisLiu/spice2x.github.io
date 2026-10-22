@@ -466,8 +466,10 @@ static BOOL WINAPI HandlerRoutine(DWORD dwCtrlType) {
 
     if (dwCtrlType == CTRL_C_EVENT) {
         launcher::shutdown();
+        return TRUE;
     } else if (dwCtrlType == CTRL_CLOSE_EVENT) {
         launcher::shutdown();
+        return TRUE;
     }
 
     return FALSE;

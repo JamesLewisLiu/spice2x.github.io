@@ -75,6 +75,7 @@ namespace api::modules {
         // exit()
         if (req.params.Size() == 0) {
             launcher::shutdown();
+            return;
         }
 
         // check code

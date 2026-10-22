@@ -8,4 +8,5 @@ namespace launcher {
     void kill(UINT exit_code = EXIT_FAILURE);
     void shutdown(UINT exit_code = EXIT_SUCCESS);
     void restart();
+    void finish_legacy_shutdown();
 }

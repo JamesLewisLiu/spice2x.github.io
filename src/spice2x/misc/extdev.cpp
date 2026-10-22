@@ -14,6 +14,9 @@
 #include "acio/icca/icca.h"
 #include "games/gitadora/gitadora.h"
 #include "games/gitadora/io.h"
+#include "games/gitadora/legacy.h"
+#include "games/gitadora/legacy_profile.h"
+#include "games/gitadora/legacy_input.h"
 #include "avs/game.h"
 
 using namespace GameAPI;
@@ -340,9 +343,16 @@ static int __cdecl gfdm_unit2_boot_initialize() {
 
 constexpr int LEFTY_X_CENTER = 2040;
 
+static long __cdecl gfdm_unit_get_input_p(int device, size_t player, bool raw = false);
+
 // this seems to be only used in the I/O test menu, not in gameplay
 static void *__cdecl gfdm_unit_get_button_p(void *a1, int a2, size_t player) {
-    memset(a1, 0, 64);
+    games::gitadora::legacy::clear_button_state(a1, games::gitadora::legacy::enabled());
+
+    if (games::gitadora::legacy::enabled()) {
+        games::gitadora::legacy::populate_button_inputs(a1,
+                gfdm_unit_get_input_p(a2, player, true), games::gitadora::is_drum());
+    }
 
     // irrelevant for drummania
     if (games::gitadora::is_drum()) {
@@ -417,31 +427,53 @@ static void *__cdecl gfdm_unit2_get_button(void *a1, int a2) {
     return gfdm_unit_get_button_p(a1, a2, 1);
 }
 
-static bool __cdecl gfdm_unit_get_button_dm(int a1) {
+static int legacy_drum_button_value(int button, size_t player) {
+    if (!games::gitadora::is_drum()) return 0;
+    games::gitadora::legacy::ButtonState state{};
+    games::gitadora::legacy::populate_button_inputs(&state,
+            gfdm_unit_get_input_p(0, player, true), true);
+    return games::gitadora::legacy::drum_button_value(state, button);
+}
+
+static int legacy_guitar_button_value(int unit, int button, size_t player) {
+    if (!games::gitadora::is_guitar()) return 0;
+    games::gitadora::legacy::ButtonState state{};
+    games::gitadora::legacy::populate_button_inputs(&state,
+            gfdm_unit_get_input_p(unit, player, true), false);
+    return games::gitadora::legacy::guitar_button_value(state, button);
+}
+
+static int __cdecl gfdm_unit_get_button_dm(int a1) {
+    if (games::gitadora::legacy::enabled()) return legacy_drum_button_value(a1, 0);
     return a1 == 9 || a1 == 8;
 }
 
-static bool __cdecl gfdm_unit2_get_button_dm(int a1) {
+static int __cdecl gfdm_unit2_get_button_dm(int a1) {
+    if (games::gitadora::legacy::enabled()) return legacy_drum_button_value(a1, 1);
     return a1 == 9 || a1 == 8;
 }
 
 static int __cdecl gfdm_unit_get_button_gf(int a1, int a2) {
+    if (games::gitadora::legacy::enabled()) return legacy_guitar_button_value(a1, a2, a1 > 0 ? 1 : 0);
     return 0;
 }
 
 static int __cdecl gfdm_unit2_get_button_gf(int a1, int a2) {
+    if (games::gitadora::legacy::enabled()) return legacy_guitar_button_value(a1, a2, 1);
     return 0;
 }
 
 static long __cdecl gfdm_unit_get_dm_attack_border_value(int a1, int *a2) {
-    if (a1 >= 7)
+    if (games::gitadora::legacy::enabled() ?
+            !games::gitadora::legacy::attack_border_capacity_valid(a1) : a1 >= 7)
         return -1;
     memcpy(a2, GFDM_DM_ATTACK_BORDER_VALUE, 7 * sizeof(int32_t));
     return 0;
 }
 
 static long __cdecl gfdm_unit2_get_dm_attack_border_value(int a1, int *a2) {
-    if (a1 >= 7)
+    if (games::gitadora::legacy::enabled() ?
+            !games::gitadora::legacy::attack_border_capacity_valid(a1) : a1 >= 7)
         return -1;
     memcpy(a2, GFDM_DM_ATTACK_BORDER_VALUE, 7 * sizeof(int32_t));
     return 0;
@@ -455,7 +487,7 @@ static long __cdecl gfdm_unit2_get_errorcount(int a1) {
     return 0;
 }
 
-static long __cdecl gfdm_unit_get_input_p(int device, size_t player) {
+static long __cdecl gfdm_unit_get_input_p(int device, size_t player, bool raw) {
     long ret = 0;
 
     // get buttons and analogs
@@ -524,7 +556,12 @@ static long __cdecl gfdm_unit_get_input_p(int device, size_t player) {
 
         const auto pick_up = Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[3 + offset]));
         const auto pick_down = Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[4 + offset]));
-        if (!games::gitadora::PICK_ALGO.has_value()) {
+        if (raw) {
+            // Raw TEST reads must not consume gameplay's pick rising edges or
+            // update the SOCD cleaner a second time in the same frame.
+            if (pick_up) ret |= 0x80 | 0x20;
+            if (pick_down) ret |= 0x100 | 0x20;
+        } else if (!games::gitadora::PICK_ALGO.has_value()) {
             // legacy behavior (detect rising edges only, input for 1 frame)
             if (pick_up) {
                 if (!GFDM_GF_PICK_STATE_UP[player]) {
@@ -597,14 +634,14 @@ static long __cdecl gfdm_unit_get_input_p(int device, size_t player) {
         };
 
         // knob up
-        if (Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[10 + offset]))) {
+        if (!raw && Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[10 + offset]))) {
             if ((knob[player] >> 2) < 5) {
                 knob[player]++;
             }
         }
 
         // knob down
-        if (Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[11 + offset]))) {
+        if (!raw && Buttons::getState(RI_MGR, buttons.at(gitadora_button_mapping[11 + offset]))) {
             if (knob[player] > 0) {
                 knob[player]--;
             }

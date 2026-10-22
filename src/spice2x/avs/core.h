@@ -452,6 +452,7 @@ namespace avs {
         void create_log();
         void load_dll();
         void boot();
+        void attach_legacy_storage_hooks();
         void copy_defaults();
         void shutdown();
 

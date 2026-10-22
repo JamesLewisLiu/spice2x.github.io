@@ -1,4 +1,5 @@
 #include "gitadora.h"
+#include "legacy.h"
 #include "asio.h"
 #include "handle.h"
 #include "bi2x_hook.h"
@@ -183,9 +184,11 @@ namespace games::gitadora {
      */
     static bool __cdecl sys_code_get_cmdline(const char *cmdline) {
         if (strcmp(cmdline, "-d") == 0) {
-            return true;
+            return !legacy::enabled() || is_drum();
         } else if (strcmp(cmdline, "-DM") == 0) {
-            return true;
+            return !legacy::enabled() || is_drum();
+        } else if (legacy::enabled() && (strcmp(cmdline, "-g") == 0 || strcmp(cmdline, "-GF") == 0)) {
+            return is_guitar();
         } else if (strcmp(cmdline, "-WINDOW") == 0) {
             return GRAPHICS_WINDOWED;
         } else if (strcmp(cmdline, "-LOGOUT") == 0) {

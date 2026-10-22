@@ -6,6 +6,7 @@
 #include "easrv/easrv.h"
 #include "easrv/smartea.h"
 #include "games/gitadora/gitadora.h"
+#include "games/gitadora/legacy.h"
 #include "hooks/avshook.h"
 #include "hooks/graphics/graphics.h"
 #include "util/detour.h"
@@ -123,6 +124,310 @@ namespace avs {
             IMPORT_AVS21730,
         };
 
+
+        static void set_string(core::property_ptr owner, const char *path, const char *value) {
+            core::property_search_remove_safe(owner, nullptr, path);
+            core::property_node_create(owner, nullptr, core::NODE_TYPE_str, path, value);
+        }
+
+        // Shared by bootstrap-owned games and XG1's game-owned EA3 config.
+        static void apply_identity_overrides(core::property_ptr owner, const char *model) {
+            if (!PCBID_CUSTOM.empty()) {
+                set_string(owner, "/ea3/id/pcbid", PCBID_CUSTOM.substr(0, 20).c_str());
+                if (ACCOUNTID_CUSTOM.empty() && strcmp(model, "M32") == 0) {
+                    ACCOUNTID_CUSTOM = PCBID_CUSTOM;
+                }
+            }
+            if (!SOFTID_CUSTOM.empty()) {
+                set_string(owner, "/ea3/id/softid", SOFTID_CUSTOM.substr(0, 20).c_str());
+            }
+            if (!ACCOUNTID_CUSTOM.empty()) {
+                set_string(owner, "/ea3/id/accountid", ACCOUNTID_CUSTOM.substr(0, 20).c_str());
+            }
+            if (!EA3_DEBUG_VERBOSE) {
+                core::property_search_remove_safe(owner, nullptr, "/ea3/debug/verbose");
+            }
+        }
+
+        static void apply_network_settings(core::property_ptr ea3_config,
+                unsigned short easrv_port, bool easrv_maint, bool easrv_smart) {
+            auto ea3_network = core::property_search_safe(ea3_config, nullptr, "/ea3/network");
+            // http11
+            if (HTTP11 >= 0) {
+                avs::core::property_search_remove_safe(ea3_config, ea3_network, "http11");
+                avs::core::property_node_create(ea3_config, ea3_network,
+                        avs::core::NODE_TYPE_bool, "http11", HTTP11);
+            }
+
+            // url slash
+            if (URL_SLASH >= 0) {
+                avs::core::property_search_remove_safe(ea3_config, ea3_network, "url_slash");
+                avs::core::property_node_create(ea3_config, ea3_network,
+                        avs::core::NODE_TYPE_bool, "url_slash", URL_SLASH);
+            }
+
+            // custom service url
+            if (!URL_CUSTOM.empty()) {
+                avs::core::property_search_remove_safe(ea3_config, ea3_network, "services");
+                avs::core::property_node_create(ea3_config, ea3_network,
+                        avs::core::NODE_TYPE_str, "services", URL_CUSTOM.c_str());
+            }
+
+            // server - replace URL on the fly
+            if (easrv_port != 0u) {
+                std::ostringstream url;
+                url << "http://localhost:" << easrv_port << "/";
+                std::string url_str = url.str();
+
+                avs::core::property_search_remove_safe(ea3_config, ea3_network, "services");
+                avs::core::property_node_create(ea3_config, ea3_network,
+                        avs::core::NODE_TYPE_str, "services", url_str.c_str());
+            }
+
+            // remember URL
+            char url_buffer[512] {};
+            avs::core::property_node_refer(ea3_config, nullptr, "/ea3/network/services",
+                    avs::core::NODE_TYPE_str, url_buffer, sizeof(url_buffer));
+            EA3_BOOT_URL = std::string(url_buffer);
+
+            // ssl initialization
+            if (string_begins_with(url_buffer, "https")) {
+
+                // load ssl module
+                HMODULE kws = libutils::try_library("kws.dll");
+                if (kws != nullptr) {
+
+                    // get functions
+                    ssl_protocol_init = libutils::try_proc<ssl_protocol_init_t>(kws, "ssl_protocol_init");
+                    ssl_protocol_fini = libutils::try_proc<ssl_protocol_fini_t>(kws, "ssl_protocol_fini");
+
+                    // initialize
+                    if (ssl_protocol_init != nullptr) {
+                        log_info("avs-ea3", "initializing SSL protocol handler");
+                        ssl_protocol_init();
+                    }
+                }
+            }
+
+            // smartea logic: check if services are dead
+            if (easrv_smart && !smartea::check_url(EA3_BOOT_URL)) {
+                log_info("avs-ea3", "starting smartea local server on port 8080");
+
+                // start server
+                easrv_start(8080, easrv_maint, 4, 8);
+
+                // fix URL
+                EA3_BOOT_URL = "http://localhost:8080";
+                avs::core::property_search_remove_safe(ea3_config, ea3_network, "services");
+                avs::core::property_node_create(ea3_config, ea3_network,
+                        avs::core::NODE_TYPE_str, "services", EA3_BOOT_URL.c_str());
+
+                // fix URL slash
+                URL_SLASH = 1;
+                avs::core::property_search_remove_safe(ea3_config, ea3_network, "url_slash");
+                avs::core::property_node_create(ea3_config, ea3_network,
+                        avs::core::NODE_TYPE_bool, "url_slash", &URL_SLASH);
+            }
+
+        }
+
+
+        static thread_local struct {
+            core::property_ptr owner = nullptr;
+            core::node_ptr node = nullptr;
+        } legacy_ea3_config;
+        static core::PROPERTY_SEARCH_T legacy_property_search;
+        static core::PROPERTY_DESTROY_T legacy_property_destroy;
+        static AVS_EA3_BOOT_STARTUP_T legacy_ea3_boot;
+        static AVS_EA3_SHUTDOWN_T legacy_ea3_shutdown;
+        static unsigned short legacy_easrv_port;
+        static bool legacy_easrv_maint;
+        static bool legacy_easrv_smart;
+        static bool legacy_ea3_live;
+
+        static core::node_ptr legacy_search(core::property_ptr owner, core::node_ptr parent, const char *path) {
+            auto node = legacy_property_search(owner, parent, path);
+            // Only eam_boot's lookup establishes ownership. An AVS node is not a property handle.
+            if (parent == nullptr && path != nullptr && strcmp(path, "/ea3") == 0) {
+                legacy_ea3_config = {owner, node};
+            }
+            return node;
+        }
+
+        static core::avs_error_t legacy_destroy(core::property_ptr owner) {
+            if (owner == legacy_ea3_config.owner) {
+                legacy_ea3_config = {};
+            }
+            return legacy_property_destroy(owner);
+        }
+
+        static int legacy_boot(void *node) {
+            auto owner = legacy_ea3_config.owner;
+            if (!owner || node != legacy_ea3_config.node) {
+                log_fatal("avs-ea3", "legacy ea3_boot called without its captured property owner");
+            }
+            if (legacy_ea3_live) {
+                log_fatal("avs-ea3", "legacy EA3 boot called twice without shutdown");
+            }
+            // Keep the game-owned EA3 tree consistent with Spice's selected
+            // standard configuration and its resolved datecode.
+            set_string(owner, "/ea3/soft/model", game::MODEL);
+            set_string(owner, "/ea3/soft/dest", game::DEST);
+            set_string(owner, "/ea3/soft/spec", game::SPEC);
+            set_string(owner, "/ea3/soft/rev", game::REV);
+            set_string(owner, "/ea3/soft/ext", game::EXT);
+            apply_identity_overrides(owner, game::MODEL);
+            apply_network_settings(owner, legacy_easrv_port, legacy_easrv_maint, legacy_easrv_smart);
+            char pcbid[21] {};
+            char accountid[21] {};
+            core::property_node_refer(owner, nullptr, "/ea3/id/pcbid", core::NODE_TYPE_str,
+                    pcbid, sizeof(pcbid));
+            core::property_node_refer(owner, nullptr, "/ea3/id/accountid", core::NODE_TYPE_str,
+                    accountid, sizeof(accountid));
+            EA3_BOOT_PCBID = pcbid;
+            EA3_BOOT_ACCOUNTID = accountid;
+            logger::PCBIDFilter filter;
+            log_info("avs-ea3", "calling game-owned legacy EA3 boot");
+            int result = legacy_ea3_boot(node);
+            legacy_ea3_live = result >= 0;
+            return result;
+        }
+
+        static void legacy_shutdown() {
+            if (!legacy_ea3_live) {
+                log_warning("avs-ea3", "ignoring legacy EA3 shutdown without a successful boot");
+                return;
+            }
+            if (ssl_protocol_fini) {
+                ssl_protocol_fini();
+                ssl_protocol_fini = nullptr;
+                ssl_protocol_init = nullptr;
+            }
+            log_info("avs-ea3", "calling game-owned legacy EA3 shutdown");
+            legacy_ea3_shutdown();
+            legacy_ea3_live = false;
+        }
+
+        void attach_legacy_hooks() {
+            if (!games::gitadora::legacy::enabled() || games::gitadora::legacy::is_cn()) {
+                return;
+            }
+            static bool attached = false;
+            if (attached) {
+                return;
+            }
+            auto eam = libutils::try_module("libeamusement.dll");
+            if (!eam) {
+                log_fatal("avs-ea3", "legacy Japanese game requires libeamusement.dll before EA3 hooks");
+            }
+            legacy_property_search = detour::iat_try("property_search", legacy_search, eam, core::DLL_NAME.c_str());
+            legacy_property_destroy = detour::iat_try("property_destroy", legacy_destroy, eam, core::DLL_NAME.c_str());
+            legacy_ea3_boot = detour::iat_try("ea3_boot", legacy_boot, eam, DLL_NAME.c_str());
+            legacy_ea3_shutdown = detour::iat_try("ea3_shutdown", legacy_shutdown, eam, DLL_NAME.c_str());
+            if (!legacy_property_search || !legacy_property_destroy || !legacy_ea3_boot || !legacy_ea3_shutdown) {
+                log_fatal("avs-ea3", "unsupported legacy libeamusement imports (EA3 hooks incomplete)");
+            }
+            attached = true;
+        }
+
+        void prepare_legacy(unsigned short easrv_port, bool easrv_maint, bool easrv_smart) {
+            legacy_easrv_port = easrv_port;
+            legacy_easrv_maint = easrv_maint;
+            legacy_easrv_smart = easrv_smart;
+
+            // The device hook replaces the security plug producer, so publish the old libsystem
+            // aliases before native boot. Read the existing configuration without changing it.
+            char pcbid[21] {};
+            char softid[21] {"012199999999"};
+            char hardid[21] {"0100DEADBEEF"};
+            char accountid[21] {"012018008135"};
+            if (CFG_PATH.empty()) {
+                if (!games::gitadora::legacy::ea3_config_path().empty()) {
+                    CFG_PATH = games::gitadora::legacy::ea3_config_path();
+                } else {
+                    for (auto candidate : {"prop/ea3-config.xml", "prop/ea3-cfg.xml", "prop/eamuse-config.xml",
+                            "prop/config.xml"}) {
+                        if (fileutils::file_exists(candidate)) {
+                            CFG_PATH = candidate;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!CFG_PATH.empty()) {
+                log_info("avs-ea3", "reading XG1 settings from {}", CFG_PATH);
+                auto config = core::config_read(CFG_PATH.c_str());
+                if (config) {
+                    auto read_id = [&](const char *key, char *value, size_t size) {
+                        if (core::property_search(config, nullptr, key)) {
+                            core::property_node_refer(config, nullptr, key, core::NODE_TYPE_str, value, size);
+                        }
+                    };
+                    read_id("/config/ea3_conf/identity/pcbid", pcbid, sizeof(pcbid));
+                    read_id("/ea3/id/pcbid", pcbid, sizeof(pcbid));
+                    read_id("/ea3/id/softid", softid, sizeof(softid));
+                    read_id("/ea3/id/hardid", hardid, sizeof(hardid));
+                    read_id("/ea3/id/accountid", accountid, sizeof(accountid));
+                    // Keep the old launcher's service settings unless a Spice option overrides them.
+                    if (URL_CUSTOM.empty()) {
+                        char services[512] {};
+                        read_id("/config/ea3_conf/network/services", services, sizeof(services));
+                        read_id("/ea3/network/services", services, sizeof(services));
+                        URL_CUSTOM = services;
+                    }
+                    const char *network = core::property_search(config, nullptr, "/ea3/network")
+                            ? "/ea3/network/" : "/config/ea3_conf/network/";
+                    for (auto item : {std::pair{"http11", &HTTP11}, std::pair{"url_slash", &URL_SLASH}}) {
+                        const auto key = std::string(network) + item.first;
+                        if (*item.second < 0 && core::property_search(config, nullptr, key.c_str())) {
+                            uint8_t value = 0;
+                            if (core::property_node_refer(config, nullptr, key.c_str(),
+                                    core::NODE_TYPE_bool, &value, sizeof(value)) > 0) {
+                                *item.second = value != 0;
+                            }
+                        }
+                    }
+                    core::config_destroy(config);
+                }
+            }
+            if (PCBID_CUSTOM.empty()) {
+                PCBID_CUSTOM = pcbid[0] ? pcbid : "01201000000000010101";
+            }
+            if (!SOFTID_CUSTOM.empty()) {
+                strncpy(softid, SOFTID_CUSTOM.c_str(), 20);
+            }
+            if (!ACCOUNTID_CUSTOM.empty()) {
+                strncpy(accountid, ACCOUNTID_CUSTOM.c_str(), 20);
+            }
+            EA3_BOOT_PCBID = PCBID_CUSTOM.substr(0, 20);
+            EA3_BOOT_ACCOUNTID = accountid;
+            std::string code = std::string(game::MODEL) + game::DEST + game::SPEC + game::REV;
+            const auto mcode = "GC" + code;
+            const auto soft_code = fmt::format("{}:{}:{}:{}:{}", game::MODEL, game::DEST,
+                    game::SPEC, game::REV, game::EXT);
+            core::avs_std_setenv("/env/boot/build", VERSION_STRING);
+            core::avs_std_setenv("/env/boot/version", "SPICETOOLS");
+            core::avs_std_setenv("/env/boot/tag", "SPICETOOLS");
+            core::avs_std_setenv("/env/app/tag", game::EXT);
+            core::avs_std_setenv("/env/profile/mcode", mcode.c_str());
+            core::avs_std_setenv("/env/profile/security_code", mcode.c_str());
+            core::avs_std_setenv("/env/profile/secplug_b_security_code", mcode.c_str());
+            core::avs_std_setenv("/env/profile/sysid", EA3_BOOT_PCBID.c_str());
+            core::avs_std_setenv("/env/profile/system_id", EA3_BOOT_PCBID.c_str());
+            core::avs_std_setenv("/env/profile/softid", softid);
+            core::avs_std_setenv("/env/profile/software_id", softid);
+            core::avs_std_setenv("/env/profile/license_id", softid);
+            core::avs_std_setenv("/env/profile/hwid", hardid);
+            core::avs_std_setenv("/env/profile/hardware_id", hardid);
+            core::avs_std_setenv("/env/profile/account_id", accountid);
+            core::avs_std_setenv("/env/profile/soft_id_code", soft_code.c_str());
+            deferredlogs::set_softid(soft_code);
+            hooks::avs::init();
+            code += game::EXT;
+            if (!game::entry_init(code.data(), nullptr)) {
+                log_fatal("avs-ea3", "legacy entry initialization failed");
+            }
+        }
 
         void load_dll() {
             log_info("avs-ea3", "loading DLL");
@@ -259,7 +564,6 @@ namespace avs {
             auto ea3_id_soft = avs::core::property_search(ea3_config, nullptr, "/ea3/id/softid");
             auto ea3_id_account = avs::core::property_search(ea3_config, nullptr, "/ea3/id/accountid");
             auto ea3_soft = avs::core::property_search(ea3_config, nullptr, "/ea3/soft");
-            auto ea3_network = avs::core::property_search_safe(ea3_config, nullptr, "/ea3/network");
 
             // node values
             char EA3_PCBID[21] { 0 };
@@ -394,48 +698,13 @@ namespace avs {
                 PCBID_CUSTOM = "01201000000000010101";
             }
 
-            // custom PCBID
-            if (!PCBID_CUSTOM.empty()) {
-
-                // copy ID
-                strncpy(EA3_PCBID, PCBID_CUSTOM.c_str(), sizeof(EA3_PCBID));
-                EA3_PCBID[20] = '\0';
-
-                // set nodes
-                avs::core::property_search_remove_safe(ea3_config, nullptr, "/ea3/id/pcbid");
-                avs::core::property_node_create(ea3_config, nullptr,
-                        avs::core::NODE_TYPE_str, "/ea3/id/pcbid", &EA3_PCBID);
-
-                if (ACCOUNTID_CUSTOM.empty() && strcmp(EA3_MODEL, "M32") == 0) {
-                    ACCOUNTID_CUSTOM = PCBID_CUSTOM;
-                }
-            }
-
-            // custom SOFTID
-            if (!SOFTID_CUSTOM.empty()) {
-
-                // copy ID
-                strncpy(EA3_SOFTID, SOFTID_CUSTOM.c_str(), sizeof(EA3_SOFTID));
-                EA3_SOFTID[20] = '\0';
-
-                // set nodes
-                avs::core::property_search_remove_safe(ea3_config, nullptr, "/ea3/id/softid");
-                avs::core::property_node_create(ea3_config, nullptr,
-                        avs::core::NODE_TYPE_str, "/ea3/id/softid", &EA3_SOFTID);
-            }
-
-            // custom ACCOUNTID
-            if (!ACCOUNTID_CUSTOM.empty()) {
-
-                // copy ID
-                strncpy(EA3_ACCOUNTID, ACCOUNTID_CUSTOM.c_str(), sizeof(EA3_ACCOUNTID));
-                EA3_ACCOUNTID[20] = '\0';
-
-                // set nodes
-                avs::core::property_search_remove_safe(ea3_config, nullptr, "/ea3/id/accountid");
-                avs::core::property_node_create(ea3_config, nullptr,
-                        avs::core::NODE_TYPE_str, "/ea3/id/accountid", &EA3_ACCOUNTID);
-            }
+            apply_identity_overrides(ea3_config, EA3_MODEL);
+            avs::core::property_node_refer(ea3_config, nullptr, "/ea3/id/pcbid",
+                    avs::core::NODE_TYPE_str, EA3_PCBID, sizeof(EA3_PCBID));
+            avs::core::property_node_refer(ea3_config, nullptr, "/ea3/id/softid",
+                    avs::core::NODE_TYPE_str, EA3_SOFTID, sizeof(EA3_SOFTID));
+            avs::core::property_node_refer(ea3_config, nullptr, "/ea3/id/accountid",
+                    avs::core::NODE_TYPE_str, EA3_ACCOUNTID, sizeof(EA3_ACCOUNTID));
 
             // check if PCBID is defined - should never hit, left for sanity check only
             if (avs::core::property_search(ea3_config, nullptr, "/ea3/id/pcbid") == nullptr) {
@@ -638,82 +907,7 @@ namespace avs {
             // save new rev
             memcpy(avs::game::REV, EA3_REV, 2);
 
-            // http11
-            if (HTTP11 >= 0) {
-                avs::core::property_search_remove_safe(ea3_config, ea3_network, "http11");
-                avs::core::property_node_create(ea3_config, ea3_network,
-                        avs::core::NODE_TYPE_bool, "http11", HTTP11);
-            }
-
-            // url slash
-            if (URL_SLASH >= 0) {
-                avs::core::property_search_remove_safe(ea3_config, ea3_network, "url_slash");
-                avs::core::property_node_create(ea3_config, ea3_network,
-                        avs::core::NODE_TYPE_bool, "url_slash", URL_SLASH);
-            }
-
-            // custom service url
-            if (!URL_CUSTOM.empty()) {
-                avs::core::property_search_remove_safe(ea3_config, ea3_network, "services");
-                avs::core::property_node_create(ea3_config, ea3_network,
-                        avs::core::NODE_TYPE_str, "services", URL_CUSTOM.c_str());
-            }
-
-            // server - replace URL on the fly
-            if (easrv_port != 0u) {
-                std::ostringstream url;
-                url << "http://localhost:" << easrv_port << "/";
-                std::string url_str = url.str();
-
-                avs::core::property_search_remove_safe(ea3_config, ea3_network, "services");
-                avs::core::property_node_create(ea3_config, ea3_network,
-                        avs::core::NODE_TYPE_str, "services", url_str.c_str());
-            }
-
-            // remember URL
-            char url_buffer[512] {};
-            avs::core::property_node_refer(ea3_config, nullptr, "/ea3/network/services",
-                    avs::core::NODE_TYPE_str, url_buffer, sizeof(url_buffer));
-            EA3_BOOT_URL = std::string(url_buffer);
-
-            // ssl initialization
-            if (string_begins_with(url_buffer, "https")) {
-
-                // load ssl module
-                HMODULE kws = libutils::try_library("kws.dll");
-                if (kws != nullptr) {
-
-                    // get functions
-                    ssl_protocol_init = libutils::try_proc<ssl_protocol_init_t>(kws, "ssl_protocol_init");
-                    ssl_protocol_fini = libutils::try_proc<ssl_protocol_fini_t>(kws, "ssl_protocol_fini");
-
-                    // initialize
-                    if (ssl_protocol_init != nullptr) {
-                        log_info("avs-ea3", "initializing SSL protocol handler");
-                        ssl_protocol_init();
-                    }
-                }
-            }
-
-            // smartea logic: check if services are dead
-            if (easrv_smart && !smartea::check_url(EA3_BOOT_URL)) {
-                log_info("avs-ea3", "starting smartea local server on port 8080");
-
-                // start server
-                easrv_start(8080, easrv_maint, 4, 8);
-
-                // fix URL
-                EA3_BOOT_URL = "http://localhost:8080";
-                avs::core::property_search_remove_safe(ea3_config, ea3_network, "services");
-                avs::core::property_node_create(ea3_config, ea3_network,
-                        avs::core::NODE_TYPE_str, "services", EA3_BOOT_URL.c_str());
-
-                // fix URL slash
-                URL_SLASH = 1;
-                avs::core::property_search_remove_safe(ea3_config, ea3_network, "url_slash");
-                avs::core::property_node_create(ea3_config, ea3_network,
-                        avs::core::NODE_TYPE_bool, "url_slash", &URL_SLASH);
-            }
+            apply_network_settings(ea3_config, easrv_port, easrv_maint, easrv_smart);
 
             // boot EA3
             logger::PCBIDFilter filter;
