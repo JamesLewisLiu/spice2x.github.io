@@ -1,4 +1,5 @@
 #include "gitadora.h"
+#include "xg_codec.h"
 #include "asio.h"
 #include "handle.h"
 #include "bi2x_hook.h"
@@ -277,6 +278,11 @@ namespace games::gitadora {
     }
 
     GitaDoraGame::GitaDoraGame() : Game("GitaDora") {
+    }
+
+    void GitaDoraGame::post_attach() {
+        Game::post_attach();
+        xg_codec::attach();
     }
 
     void GitaDoraGame::pre_attach() {

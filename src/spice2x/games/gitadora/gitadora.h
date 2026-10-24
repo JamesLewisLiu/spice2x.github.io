@@ -64,6 +64,7 @@ namespace games::gitadora {
         GitaDoraGame();
         virtual void pre_attach() override;
         virtual void attach() override;
+        virtual void post_attach() override;
     };
 
     void fix_audio_channel_mask(WAVEFORMATEX *format);

@@ -477,6 +477,7 @@ set(SOURCE_FILES ${SOURCE_FILES}
         games/nost/poke.cpp
         games/nost/touch_mode.cpp
         games/gitadora/gitadora.cpp
+        games/gitadora/xg_codec.cpp
         games/gitadora/asio.cpp
         games/gitadora/io.cpp
         games/gitadora/handle.cpp
