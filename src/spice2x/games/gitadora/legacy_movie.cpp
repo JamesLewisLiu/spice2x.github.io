@@ -11,6 +11,7 @@
 
 namespace games::gitadora::legacy::movie {
 namespace {
+#if defined(_M_IX86) || defined(__i386__)
 constexpr DWORD NEW_THUNK = 0xa57c;
 constexpr DWORD FREE_THUNK = 0xa5ab;
 struct Profile {
@@ -98,11 +99,12 @@ void redirect(BYTE *call, const void *target) {
                                  reinterpret_cast<uintptr_t>(call + 5));
   std::memcpy(call + 1, &relative, sizeof(relative));
 }
+#endif
 } // namespace
 
 void prepare() {
-  std::call_once(prepare_once, [] {
 #if defined(_M_IX86) || defined(__i386__)
+  std::call_once(prepare_once, [] {
     // Intentional process lifetime, matching the native graph/AVS contract.
     // Do not release reservations from static destruction or host shutdown.
     pool = new (std::nothrow) BufferPool;
@@ -115,8 +117,8 @@ void prepare() {
       log_warning("gdxg-movie",
                   "Cannot reserve 192 + 448 MiB; keeping native allocator");
     }
-#endif
   });
+#endif
 }
 
 bool attach(HMODULE module, HMODULE game) {
